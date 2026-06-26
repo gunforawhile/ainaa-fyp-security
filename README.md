@@ -1,13 +1,13 @@
-# 📦 Streamlit App Starter Kit 
+# 📦 Ainaa FYP AI-ASSISTED IDENTIFICATION OF SECURITY-RELATED REQUIREMENTS IN SOFTWARE REQUIREMENT SPECIFICATIONS
 ```
 ⬆️ (Replace above with your app's name)
 ```
 
-Description of the app ...
+AI-ASSISTED IDENTIFICATION OF SECURITY-RELATED REQUIREMENTS IN SOFTWARE REQUIREMENT SPECIFICATIONS
 
 ## Demo App
 
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://app-starter-kit.streamlit.app/)
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://ainaa-fyp.streamlit.app/)
 
 ## GitHub Codespaces
 
