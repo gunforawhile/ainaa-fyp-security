@@ -3,11 +3,18 @@ import pandas as pd
 from io import StringIO #remove?
 import pdfplumber
 import spacy
-from spacy.lang.en.stop_words import STOP_WORDS
+import subprocess
+import sys
 import re
 
 #spacy model
-nlp=spacy.load("en_core_web_sm")
+try:
+  nlp=spacy.load("en_core_web_sm")
+except OSError:
+  subprocess.run([sys.executable, "-m", "spacy", "download", "en_core_web_sm"])
+  nlp = spacy.load("en_core_web_sm")
+
+from spacy.lang.en.stop_words import STOP_WORDS
 
 st.title('Software Requirement Specification for Security-Related Requirements')
 
