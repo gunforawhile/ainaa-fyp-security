@@ -59,41 +59,42 @@ if all_text:
   #sentence tokenization
   st.write("1. Sentence tokenization...")
   doc = nlp(combined_text)
-    sentences = [sent.text.strip() for sent in doc.sents if sent.text.strip()]
+  sentences = [sent.text.strip() for sent in doc.sents if sent.text.strip()]
 
-    st.write(f"**{len(sentences)} sentences extracted**")
-    with st.expander("View Tokenized Sentences"):
-        for i, sent in enumerate(sentences, 1):
-            st.write(f"`{i}.` {sent}")
+  st.write(f"**{len(sentences)} sentences extracted**")
+  with st.expander("View Tokenized Sentences"):
+    for i, sent in enumerate(sentences, 1):
+      st.write(f"`{i}.` {sent}")
+      
   #noise reduction
   st.write("2. Noise reduction...")
   def clean_sentence(sentence):
-        # for lowercase
-        sentence = sentence.lower()
-        # remove special characters, numbers, extra whitespace
-        sentence = re.sub(r"[^a-z\s]", "", sentence)
-        sentence = re.sub(r"\s+", " ", sentence).strip()
-        # remove stop words
-        tokens = sentence.split()
-        tokens = [word for word in tokens if word not in STOP_WORDS]
-        return " ".join(tokens)
+    # for lowercase
+    sentence = sentence.lower()
+    # remove special characters, numbers, extra whitespace
+    sentence = re.sub(r"[^a-z\s]", "", sentence)
+    sentence = re.sub(r"\s+", " ", sentence).strip()
+    # remove stop words
+    tokens = sentence.split()
+    tokens = [word for word in tokens if word not in STOP_WORDS]
+    return " ".join(tokens)
 
-    cleaned_sentences = [clean_sentence(s) for s in sentences]
-    # filter out empty sentences after cleaning
-    cleaned_sentences = [s for s in cleaned_sentences if s]
+  cleaned_sentences = [clean_sentence(s) for s in sentences]
+  # filter out empty sentences after cleaning
+  cleaned_sentences = [s for s in cleaned_sentences if s]
 
-    st.write(f"**{len(cleaned_sentences)} sentences after noise reduction**")
-    with st.expander("View Cleaned Sentences"):
-        for i, sent in enumerate(cleaned_sentences, 1):
-            st.write(f"`{i}.` {sent}")
+  st.write(f"**{len(cleaned_sentences)} sentences after noise reduction**")
+  with st.expander("View Cleaned Sentences"):
+    for i, sent in enumerate(cleaned_sentences, 1):
+      st.write(f"`{i}.` {sent}")
 
   #before and after comparison, can delete after testing
   st.write("Before vs After Comparison")
-    comparison_df = pd.DataFrame({
-        "Original Sentence": sentences[:len(cleaned_sentences)],
-        "Cleaned Sentence": cleaned_sentences
-    })
-    st.dataframe(comparison_df)
+  comparison_df = pd.DataFrame({
+      "Original Sentence": sentences[:len(cleaned_sentences)],
+      "Cleaned Sentence": cleaned_sentences
+  })
+  st.dataframe(comparison_df)
 
   #ready for analysis
   st.write("## ✅ Ready for Requirement Analysis")
