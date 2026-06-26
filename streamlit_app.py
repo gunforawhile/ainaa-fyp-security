@@ -53,8 +53,8 @@ if uploaded_file is not None:
 if all_text:
   combined_text="\n\n".join(all_text)
   #view text
-   with st.expander("Raw Text Preview"):
-        st.text_area("Raw", combined_text[:1000] + "...", height=200)
+  with st.expander("Raw Text Preview"):
+      st.text_area("Raw", combined_text[:1000] + "...", height=200)
 
   #sentence tokenization
   st.write("1. Sentence tokenization...")
