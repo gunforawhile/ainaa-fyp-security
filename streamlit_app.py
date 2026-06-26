@@ -1,5 +1,7 @@
 import streamlit as st
 import pandas as pd
+from io import StringIO
+pip install streamlit[pdf]
 
 st.title('Software Requirement Specification for Security-Related Requirements')
 
@@ -17,5 +19,11 @@ st.write(f" {len(txt)} characters | {len(txt.split())} words")
 st.write('File upload')
 #support csv and pdf, multiple files
 uploaded_file=st.file_uploader(
-  "Upload file", accept_multiple_files=True,type=["csv","pdf"]
+  "Choose file(s)", accept_multiple_files=True,type=["csv","pdf"]
 )
+if uploaded_file is not None:
+  #if text
+  stringio = StringIO(uploaded_file.getvalue().decode("utf-8"))
+  string_data = stringio.read()
+  #if csv file
+  dataframe=pd.read_csv(uploaded_file)
