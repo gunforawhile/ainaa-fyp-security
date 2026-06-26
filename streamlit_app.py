@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-#from io import StringIO
 import pdfplumber
 import nltk
 import re
@@ -17,7 +16,7 @@ st.title('Software Requirement Specification for Security-Related Requirements')
 
 st.write('The system is to identify security-related requirements in the SRS')
 
-st.info('Text / SRS File Upload (only CSV or/and TXT files')
+st.info('Text / SRS File Upload (only CSV or/and TXT files)')
 
 #user input text
 st.write('Text')
@@ -38,21 +37,21 @@ if txt.strip():
   all_text.append(txt)
   
 #preprocess the files
-if uploaded_file is not None:
+if uploaded_file:
   
   for uploaded_files in uploaded_file:
-    st.write(f"{uploaded_file.name}")
+    st.write(f"{uploaded_files.name}")
     #if text
-    if uploaded_file.name.endswith(".csv"):
-        df=pd.read_csv(uploaded_file)
+    if uploaded_files.name.endswith(".csv"):
+        df=pd.read_csv(uploaded_files)
         string_data=df.to_string(index=False)
   
     #if csv file
-    elif uploaded_file.name.endswith(".txt"):
-      string_data=uploaded_file.read().decode("utf-8",errors="ignore")
+    elif uploaded_files.name.endswith(".txt"):
+      string_data=uploaded_files.read().decode("utf-8",errors="ignore")
 
     all_text.append(string_data)
-    st.success(f"Loaded: {uploaded_file.name}")
+    st.success(f"Loaded: {uploaded_files.name}")
 
 if all_text:
   combined_text="\n\n".join(all_text)
