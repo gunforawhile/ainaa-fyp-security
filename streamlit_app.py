@@ -5,6 +5,7 @@ import pdfplumber
 # import spacy
 # import subprocess
 # import sys
+import nltk
 import re
 
 #spacy model
