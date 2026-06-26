@@ -16,17 +16,17 @@ st.title('Software Requirement Specification for Security-Related Requirements')
 
 st.write('The system is to identify security-related requirements in the SRS')
 
-st.info('Text / SRS File Upload (only CSV or/and TXT files)')
+st.info('Text / SRS File Upload')
 
 #user input text
-st.write('Text')
+st.write('Text Input')
 txt=st.text_area(
   "Text to identify the requirements"
 )
 st.write(f" {len(txt)} characters | {len(txt.split())} words")
 
 #user file upload
-st.write('File upload')
+st.write('File Upload')
 uploaded_file=st.file_uploader(
   "Choose file(s)", accept_multiple_files=True,type=["csv","txt"]
 )
