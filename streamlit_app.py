@@ -8,4 +8,4 @@ txt=st.text_area(
   "Text to identify requirements"
 )
 
-st.write(f" {len(txt)} characters are inserted.")
+st.write(f" {len(txt)} characters | {len(txt.split())} words")
