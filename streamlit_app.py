@@ -62,7 +62,40 @@ def phase2_classify(sentence, classifier):
     return label_map[top_label], top_score
 
 # Two-Phase Classification
+def classify_requirements(sentences):
+    phase1_classifier, phase2_classifier = load_models()
+    results = []
+    progress = st.progress(0)
+    status = st.empty()
 
+    for i, sentence in enumerate(sentences):
+        status.write(f"Analysing sentence {i+1} of {len(sentences)}...")
+        progress.progress((i + 1) / len(sentences))
+
+        if len(sentence.split()) < 3:
+            continue
+
+        # Phase I
+        phase1_label, phase1_score = phase1_classify(sentence, phase1_classifier)
+
+        # Phase II (only for security requirements)
+        if phase1_label == "Security":
+            phase2_label, phase2_score = phase2_classify(sentence, phase2_classifier)
+        else:
+            phase2_label = "N/A"
+            phase2_score = None
+
+        results.append({
+            "Sentence": sentence,
+            "Phase I (Type)": phase1_label,
+            "Phase I Confidence": f"{phase1_score:.0%}",
+            "Phase II (CIA)": phase2_label,
+            "Phase II Confidence": f"{phase2_score:.0%}" if phase2_score else "N/A"
+        })
+
+    progress.empty()
+    status.empty()
+    return pd.DataFrame(results)
 
 #UI part------------------------------------------------------------------------------------------
 st.title('Software Requirement Specification for Security-Related Requirements')
@@ -141,7 +174,7 @@ else:
   st.warning("Please enter text or upload file(s) to proceed.")
 
 #classification SECTION---------------------------------------------------------------
-
+st.info("Classification of Requirements")
 
 
   
