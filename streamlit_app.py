@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 from io import StringIO
-pip install streamlit[pdf]
 
 st.title('Software Requirement Specification for Security-Related Requirements')
 
