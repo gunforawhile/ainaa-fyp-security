@@ -3,5 +3,6 @@ numpy
 pandas
 scikit-learn
 pdfplumber
-spacy
 nltk
+transformers
+torch
