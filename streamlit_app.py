@@ -175,6 +175,8 @@ else:
 
 #classification SECTION---------------------------------------------------------------
 st.info("Classification of Requirements")
-
+if st.button("Run"):
+    with st.spinner("Loading (It may take a few minutes...)"):
+        results_df = classify_requirements(sentences)
 
   
