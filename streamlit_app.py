@@ -172,10 +172,11 @@ if all_text:
     st.write(f"{len(cleaned_sentences)} sentences ready for analysis")
 
       #classification SECTION---------------------------------------------------------------
-      st.info("Classification of Requirements")
-      if st.button("Run"):
-        with st.spinner("Loading (It may take a few minutes...)"):
-            results_df = classify_requirements(sentences)
+ st.info("Classification of Requirements")
+
+ if st.button("Run"):
+    with st.spinner("Loading (It may take a few minutes...)"):
+        results_df = classify_requirements(sentences)
 else:
   st.warning("Please enter text or upload file(s) to proceed.")
 
