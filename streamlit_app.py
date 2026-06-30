@@ -141,13 +141,13 @@ if uploaded_file:
     st.success(f"Loaded: {uploaded_files.name}")
 
 if all_text:
-  combined_text="\n\n".join(all_text)
-  #view text
-  with st.expander("Raw Text Preview"):
-      st.text_area("Raw", combined_text[:1000] + "...", height=150)
-
-  #sentence tokenization
-  sentences = sent_tokenize(combined_text)
+    combined_text="\n\n".join(all_text)
+    #view text
+    with st.expander("Raw Text Preview"):
+        st.text_area("Raw", combined_text[:1000] + "...", height=150)
+        
+    #sentence tokenization
+    sentences = sent_tokenize(combined_text)
       
   #noise reduction
   def clean_sentence(sentence):
@@ -163,13 +163,15 @@ if all_text:
 
   #before and after sentences comparison
   with st.expander("Before vs After Comparison"):
-    comparison_df = pd.DataFrame({
+      comparison_df = pd.DataFrame({
         "Original Sentence": sentences[:len(cleaned_sentences)],
         "Cleaned Sentence": cleaned_sentences
-    })
+      })
+
+
     st.dataframe(comparison_df)
-      
- st.write(f"{len(cleaned_sentences)} sentences ready for analysis")
+    
+    st.write(f"{len(cleaned_sentences)} sentences ready for analysis")
 
  #classification SECTION---------------------------------------------------------------
  st.info("Classification of Requirements")
