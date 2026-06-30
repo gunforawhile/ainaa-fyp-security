@@ -150,35 +150,34 @@ if all_text:
     sentences = sent_tokenize(combined_text)
       
   #noise reduction
-  def clean_sentence(sentence):
-    sentence = sentence.lower()
-    sentence = re.sub(r"[^a-z\s]", "", sentence)
-    sentence = re.sub(r"\s+", " ", sentence).strip()
-    tokens = sentence.split()
-    tokens = [word for word in tokens if word not in STOP_WORDS]
-    return " ".join(tokens)
+    def clean_sentence(sentence):
+        sentence = sentence.lower()
+        sentence = re.sub(r"[^a-z\s]", "", sentence)
+        sentence = re.sub(r"\s+", " ", sentence).strip()
+        tokens = sentence.split()
+        tokens = [word for word in tokens if word not in STOP_WORDS]
+        return " ".join(tokens)
 
-  cleaned_sentences = [clean_sentence(s) for s in sentences]
-  cleaned_sentences = [s for s in cleaned_sentences if s]
+    cleaned_sentences = [clean_sentence(s) for s in sentences]
+    cleaned_sentences = [s for s in cleaned_sentences if s]
 
-  #before and after sentences comparison
-  with st.expander("Before vs After Comparison"):
-      comparison_df = pd.DataFrame({
-        "Original Sentence": sentences[:len(cleaned_sentences)],
-        "Cleaned Sentence": cleaned_sentences
-      })
-
-
-    st.dataframe(comparison_df)
-    
+      #before and after sentences comparison
+    with st.expander("Before vs After Comparison"):
+        comparison_df = pd.DataFrame({
+            "Original Sentence": sentences[:len(cleaned_sentences)],
+            "Cleaned Sentence": cleaned_sentences
+        })
+        st.dataframe(comparison_df)
+        
     st.write(f"{len(cleaned_sentences)} sentences ready for analysis")
 
- #classification SECTION---------------------------------------------------------------
- st.info("Classification of Requirements")
-
- if st.button("Run"):
-    with st.spinner("Loading (It may take a few minutes...)"):
-        results_df = classify_requirements(sentences)
+    #classification SECTION---------------------------------------------------------------
+    st.info("Classification of Requirements")
+    
+    if st.button("Run"):
+        with st.spinner("Loading (It may take a few minutes...)"):
+            results_df = classify_requirements(sentences)
+            
 else:
   st.warning("Please enter text or upload file(s) to proceed.")
 
