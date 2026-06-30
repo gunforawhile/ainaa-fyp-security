@@ -169,9 +169,9 @@ if all_text:
     })
     st.dataframe(comparison_df)
       
-    st.write(f"{len(cleaned_sentences)} sentences ready for analysis")
+ st.write(f"{len(cleaned_sentences)} sentences ready for analysis")
 
-      #classification SECTION---------------------------------------------------------------
+ #classification SECTION---------------------------------------------------------------
  st.info("Classification of Requirements")
 
  if st.button("Run"):
