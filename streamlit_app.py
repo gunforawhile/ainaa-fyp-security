@@ -64,6 +64,33 @@ ABBREVIATION_DICT = {
     "crud": "create read update delete",
 }
 
+#data: NFR dataset------------------------------------------------------------------------
+PROMISE_NFR_PATH = "data/nfr.txt"
+ 
+@st.cache_data
+def load_promise_nfr_dataset(filepath=PROMISE_NFR_PATH):
+    """
+    Loads the PROMISE NFR dataset, keeps only Functional (F) and Security (SE) labelled rows, and returns a list of (sentence, phase1_label, phase2_label) tuples matching the format used by evaluate_model(). phase2_label is always "N/A" since this source has no CIA Triad sub-labels.
+    """
+    label_map = {"F": "Functional", "SE": "Security"}
+    dataset = []
+ 
+    try:
+        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+            lines = [line.strip() for line in f if line.strip()]
+    except FileNotFoundError:
+        return []
+ 
+    for line in lines:
+        match = re.match(r'^([A-Za-z]+):\s*(.*)', line)
+        if not match:
+            continue
+        raw_label, text = match.group(1), match.group(2).strip()
+        if raw_label in label_map and text:
+            dataset.append((text, label_map[raw_label], "N/A"))
+ 
+    return dataset
+ 
 #Word-Net Synonym Augmentation (Class Imbalance Handling)--------------------------------
 def get_synonym(word):
     """Get a synonym for a word using WordNet, preserving meaning."""
@@ -144,20 +171,49 @@ def preprocess_pipeline(combined_text):
     return sentences, cleaned_sentences
 
 #MODEL--------------------------------------------------------------------------------------------
+# SECURITY-CENTRIC CLASSIFICATION ENGINE
+# Phase I  → fine-tuned RoBERTa-base (naa18/srs-security-classifier-phase1)
+# Phase II → zero-shot RoBERTa (no fine-tuned CIA model yet)
+
+# Hugging Face repo for the fine-tuned Phase I model
+PHASE1_MODEL_REPO = "naa18/srs-security-classifier-phase1"
+ 
+# Label mapping must match what was used during training
+PHASE1_ID2LABEL = {0: "Functional", 1: "Security"}
+
 @st.cache_resource
 def load_models():
-    phase1_classifier = pipeline("zero-shot-classification", model="roberta-large-mnli")
-    phase2_classifier = pipeline("zero-shot-classification", model="roberta-large-mnli")
+    # Phase I: load fine-tuned model from Hugging Face Hub
+    phase1_classifier = pipeline(
+        "text-classification",
+        model=PHASE1_MODEL_REPO,
+        return_all_scores=True   # gives confidence for both classes
+    )
+    # Phase II: still zero-shot (no fine-tuned CIA model yet)
+    phase2_classifier = pipeline(
+        "zero-shot-classification",
+        model="roberta-large-mnli"
+    )
     return phase1_classifier, phase2_classifier
  
 def phase1_classify(sentence, classifier):
-    """Phase I: Binary classification - Security vs Functional.
-    Looks for authentication/authorization linguistic patterns via the model."""
-    candidate_labels = ["security requirement", "functional requirement"]
-    result = classifier(sentence, candidate_labels)
-    label = result['labels'][0]
-    score = result['scores'][0]
-    return ("Security" if label == "security requirement" else "Functional"), score
+    """
+    Phase I: Binary classification using fine-tuned RoBERTa-base.
+    Trained on PROMISE NFR dataset (F vs SE labels).
+    Returns predicted label and confidence score for that label.
+    """
+    results = classifier(sentence)[0]  # list of {label, score} dicts
+    # Find the winning label
+    best = max(results, key=lambda x: x["score"])
+    # Map model output label (LABEL_0/LABEL_1 or Functional/Security)
+    raw_label = best["label"]
+    if raw_label in PHASE1_ID2LABEL.values():
+        label = raw_label
+    else:
+        # Handle LABEL_0 / LABEL_1 format
+        label_id = int(raw_label.split("_")[-1])
+        label = PHASE1_ID2LABEL[label_id]
+    return label, best["score"]
  
 def phase2_classify(sentence, classifier):
     """Phase II: Fine-grained CIA Triad classification (Security sentences only)."""
@@ -175,6 +231,7 @@ def phase2_classify(sentence, classifier):
     top_label = result['labels'][0]
     top_score = result['scores'][0]
     return label_map[top_label], top_score
+ 
  
 def classify_requirements(sentences):
     phase1_classifier, phase2_classifier = load_models()
@@ -437,6 +494,19 @@ st.title('Software Requirement Specification Identifier for Security-Related Req
 
 st.write('The system is to identify security-related requirements in the SRS')
 
+# Sidebar: model info
+with st.sidebar:
+    st.write("### ⚙️ Model Info")
+    st.write("**Phase I (Binary)**")
+    st.code(PHASE1_MODEL_REPO, language=None)
+    st.caption("Fine-tuned RoBERTa-base · PROMISE NFR dataset · F1: 91.67%")
+    st.write("**Phase II (CIA Triad)**")
+    st.code("roberta-large-mnli", language=None)
+    st.caption("Zero-shot classification")
+    st.write("**PyTorch backend**")
+    import torch
+    st.caption(f"v{torch.__version__} · {'GPU' if torch.cuda.is_available() else 'CPU'}")
+    
 tab1, tab2, tab3, tab4 = st.tabs([
     "Input & Preprocessing",
     "Classification & Recommendations",
@@ -597,16 +667,36 @@ with tab2:
 
 #Tab 3: Evaluation -------------------------------------------------------------------
 with tab3:
-    st.write("##Model Evaluation Metrics")
-    st.info(f"Evaluation uses a sample labelled dataset of {len(SAMPLE_DATASET)} SRS sentences. "
-            f"Target F1-Score: {TARGET_F1:.0%}")
+    st.write("## Model Evaluation Metrics")
  
-    use_augmented = st.checkbox("Evaluate using augmented dataset (class-balanced)", value=False)
+    promise_dataset = load_promise_nfr_dataset()
  
-    if st.button("Run Evaluation"):
-        eval_dataset = augment_minority_class(SAMPLE_DATASET) if use_augmented else SAMPLE_DATASET
-        with st.spinner("Running evaluation..."):
-            evaluate_model(eval_dataset)
+    if not promise_dataset:
+        st.error(f"Could not load PROMISE NFR dataset from `{PROMISE_NFR_PATH}`. "
+                 "Make sure `data/nfr.txt` is placed alongside `streamlit_app.py`.")
+    else:
+        f_count = len([d for d in promise_dataset if d[1] == "Functional"])
+        se_count = len([d for d in promise_dataset if d[1] == "Security"])
+        st.info(f"Evaluating on {len(promise_dataset)} PROMISE NFR sentences "
+                f"({f_count} Functional, {se_count} Security). "
+                f"Target F1-Score: {TARGET_F1:.0%}")
+ 
+        use_augmented = st.checkbox("Evaluate using augmented dataset (class-balanced)", value=False)
+ 
+        sample_size = st.slider(
+            "Number of sentences to evaluate (larger = slower, more accurate)",
+            min_value=20, max_value=len(promise_dataset),
+            value=min(50, len(promise_dataset)), step=10
+        )
+ 
+        if st.button("Run Evaluation"):
+            eval_dataset = promise_dataset
+            eval_dataset = random.sample(eval_dataset, sample_size)
+            if use_augmented:
+                eval_dataset = augment_minority_class(eval_dataset)
+            with st.spinner("Running evaluation..."):
+                evaluate_model(eval_dataset)
+ 
 
 #Tab 4: Demo----------------------------------------------------------------------
 with tab4:
