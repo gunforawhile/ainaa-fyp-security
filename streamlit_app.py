@@ -251,23 +251,31 @@ def load_models():
 #Classification Functions------------------------------------------------------------
 
 def phase1_classify(sentence, classifier):
-    results = classifier(sentence)[0]
-    best = max(results, key=lambda x: x["score"])
-    raw = best["label"]
-    if raw in PHASE1_ID2LABEL.values():
-        label = raw
+    raw = classifier(sentence)
+    if isinstance(raw[0], list):
+        results = raw[0]
     else:
-        label = PHASE1_ID2LABEL[int(raw.split("_")[-1])]
+        results = raw
+    best = max(results, key=lambda x: x["score"])
+    raw_label = best["label"]
+    if raw_label in PHASE1_ID2LABEL.values():
+        label = raw_label
+    else:
+        label = PHASE1_ID2LABEL[int(raw_label.split("_")[-1])]
     return label, best["score"]
  
 def phase2_classify(sentence, classifier):
-    results = classifier(sentence)[0]
-    best = max(results, key=lambda x: x["score"])
-    raw = best["label"]
-    if raw in PHASE2_ID2LABEL.values():
-        label = raw
+    raw = classifier(sentence)
+    if isinstance(raw[0], list):
+        results = raw[0]
     else:
-        label = PHASE2_ID2LABEL[int(raw.split("_")[-1])]
+        results = raw
+    best = max(results, key=lambda x: x["score"])
+    raw_label = best["label"]
+    if raw_label in PHASE2_ID2LABEL.values():
+        label = raw_label
+    else:
+        label = PHASE2_ID2LABEL[int(raw_label.split("_")[-1])]
     return label, best["score"]
  
 def classify_requirements(sentences):
@@ -301,7 +309,7 @@ def classify_requirements(sentences):
     progress.empty()
     status.empty()
     return pd.DataFrame(results)
-
+ 
 #Evaluation------------------------------------------------------------------------
 
 def evaluate_model(dataset):
