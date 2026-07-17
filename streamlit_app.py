@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from transformers import pipeline
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 import random
+from collections import Counter
 
 # download NLTK data
 nltk.download('punkt')
@@ -17,6 +18,11 @@ nltk.download('omw-1.4')
 from nltk.tokenize import sent_tokenize
 from nltk.corpus import stopwords
 STOP_WORDS = set(stopwords.words('english'))
+
+st.set_page_config(
+    page_title = "AI-Assisted Security Requirements Identifier",
+    layout = "wide"
+)
 
 #ABBREVIATION DICTIONARY-------------------------------------------------------
 ABBREVIATION_DICT = {
@@ -66,21 +72,17 @@ ABBREVIATION_DICT = {
 
 #data: NFR dataset------------------------------------------------------------------------
 PROMISE_NFR_PATH = "data/nfr.txt"
+TARGET_F1 = 0.92
  
 @st.cache_data
 def load_promise_nfr_dataset(filepath=PROMISE_NFR_PATH):
-    """
-    Loads the PROMISE NFR dataset, keeps only Functional (F) and Security (SE) labelled rows, and returns a list of (sentence, phase1_label, phase2_label) tuples matching the format used by evaluate_model(). phase2_label is always "N/A" since this source has no CIA Triad sub-labels.
-    """
     label_map = {"F": "Functional", "SE": "Security"}
     dataset = []
- 
     try:
         with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
             lines = [line.strip() for line in f if line.strip()]
     except FileNotFoundError:
         return []
- 
     for line in lines:
         match = re.match(r'^([A-Za-z]+):\s*(.*)', line)
         if not match:
@@ -88,156 +90,191 @@ def load_promise_nfr_dataset(filepath=PROMISE_NFR_PATH):
         raw_label, text = match.group(1), match.group(2).strip()
         if raw_label in label_map and text:
             dataset.append((text, label_map[raw_label], "N/A"))
- 
     return dataset
  
 #Word-Net Synonym Augmentation (Class Imbalance Handling)--------------------------------
 def get_synonym(word):
-    """Get a synonym for a word using WordNet, preserving meaning."""
     synsets = wordnet.synsets(word)
     if not synsets:
         return word
-    synonyms = set()
+    syns = set()
     for syn in synsets:
         for lemma in syn.lemmas():
-            candidate = lemma.name().replace("_", " ")
-            if candidate.lower() != word.lower():
-                synonyms.add(candidate)
-    if synonyms:
-        return random.choice(list(synonyms))
-    return word
+            c = lemma.name().replace("_", " ")
+            if c.lower() != word.lower():
+                syns.add(c)
+    return random.choice(list(syns)) if syns else word
  
 def synonym_augment(sentence, replace_ratio=0.3):
-    """
-    Generate an augmented version of a sentence by replacing a portion of words with WordNet synonyms, preserving original semantic meaning.
-    """
     words = sentence.split()
-    n_to_replace = max(1, int(len(words) * replace_ratio))
-    indices = random.sample(range(len(words)), min(n_to_replace, len(words)))
- 
-    new_words = words.copy()
-    for idx in indices:
-        word = re.sub(r"[^\w]", "", words[idx])
-        if word.lower() in STOP_WORDS or len(word) < 4:
+    n = max(1, int(len(words) * replace_ratio))
+    idxs = random.sample(range(len(words)), min(n, len(words)))
+    new = words.copy()
+    for i in idxs:
+        w = re.sub(r"[^\w]", "", words[i])
+        if w.lower() in STOP_WORDS or len(w) < 4:
             continue
-        synonym = get_synonym(word)
-        new_words[idx] = synonym
- 
-    return " ".join(new_words)
+        new[i] = get_synonym(w)
+    return " ".join(new)
  
 def augment_minority_class(dataset, minority_label="Security", label_index=1):
-    """
-    Doubles the minority class (Security requirements) using WordNet synonym replacement to address class imbalance, while preserving original semantic meaning.
-    """
     augmented = list(dataset)
-    minority_samples = [item for item in dataset if item[label_index] == minority_label]
- 
-    for sentence, p1_label, p2_label in minority_samples:
-        aug_sentence = synonym_augment(sentence)
-        augmented.append((aug_sentence, p1_label, p2_label))
- 
+    minority = [item for item in dataset if item[label_index] == minority_label]
+    for sentence, p1, p2 in minority:
+        augmented.append((synonym_augment(sentence), p1, p2))
     return augmented
-
+ 
 #NLP Pre-processing pipeline-----------------------------------------------------
+
 def expand_abbreviations(text):
-    """Expand known software engineering abbreviations before tokenization."""
     words = text.split()
     expanded = []
     for word in words:
         clean = re.sub(r"[^\w]", "", word.lower())
-        if clean in ABBREVIATION_DICT:
-            expanded.append(ABBREVIATION_DICT[clean])
-        else:
-            expanded.append(word)
+        expanded.append(ABBREVIATION_DICT.get(clean, word))
     return " ".join(expanded)
  
 def clean_sentence(sentence):
-    """Noise reduction: lowercase, remove special characters, remove stop words."""
     sentence = sentence.lower()
     sentence = re.sub(r"[^a-z\s]", "", sentence)
     sentence = re.sub(r"\s+", " ", sentence).strip()
-    tokens = [word for word in sentence.split() if word not in STOP_WORDS]
+    tokens = [w for w in sentence.split() if w not in STOP_WORDS]
     return " ".join(tokens)
  
 def preprocess_pipeline(combined_text):
-    """Full pipeline: abbreviation expansion -> tokenization -> noise reduction."""
-    expanded_text = expand_abbreviations(combined_text)
-    sentences = sent_tokenize(expanded_text)
-    cleaned_sentences = [clean_sentence(s) for s in sentences]
-    # keep pairs aligned, drop empty
-    pairs = [(orig, clean) for orig, clean in zip(sentences, cleaned_sentences) if clean]
-    sentences = [p[0] for p in pairs]
-    cleaned_sentences = [p[1] for p in pairs]
-    return sentences, cleaned_sentences
-
-#MODEL--------------------------------------------------------------------------------------------
-# SECURITY-CENTRIC CLASSIFICATION ENGINE
-# Phase I  → fine-tuned RoBERTa-base (naa18/srs-security-classifier-phase1)
-# Phase II → zero-shot RoBERTa (no fine-tuned CIA model yet)
-
-# Hugging Face repo for the fine-tuned Phase I model
-PHASE1_MODEL_REPO = "naa18/srs-security-classifier-phase1"
+    expanded = expand_abbreviations(combined_text)
+    sentences = sent_tokenize(expanded)
+    cleaned = [clean_sentence(s) for s in sentences]
+    pairs = [(o, c) for o, c in zip(sentences, cleaned) if c]
+    return [p[0] for p in pairs], [p[1] for p in pairs]
  
-# Label mapping must match what was used during training
+#MODEL--------------------------------------------------------------------------------------------
+PHASE1_MODEL_REPO = "naa18/srs-security-classifier-phase1"
+PHASE2_MODEL_REPO = "naa18/srs-cia-classifier-phase2"
+ 
 PHASE1_ID2LABEL = {0: "Functional", 1: "Security"}
-
+PHASE2_ID2LABEL = {0: "Confidentiality", 1: "Integrity", 2: "Availability"}
+ 
 @st.cache_resource
 def load_models():
-    # Phase I: load fine-tuned model from Hugging Face Hub
-    phase1_classifier = pipeline(
+    phase1 = pipeline(
         "text-classification",
         model=PHASE1_MODEL_REPO,
-        return_all_scores=True   # gives confidence for both classes
+        return_all_scores=True
     )
-    # Phase II: still zero-shot (no fine-tuned CIA model yet)
-    phase2_classifier = pipeline(
-        "zero-shot-classification",
-        model="roberta-large-mnli"
+    phase2 = pipeline(
+        "text-classification",
+        model=PHASE2_MODEL_REPO,
+        return_all_scores=True
     )
-    return phase1_classifier, phase2_classifier
+    return phase1, phase2
  
+
+#Recommendations part--------------------------------------------------------------
+# RECOMMENDATION_RULES = [
+#     {
+#         "trigger_keywords": ["password", "login", "log in", "sign in", "credential"],
+#         "category": "Confidentiality - Authentication",
+#         "recommendation": "The system shall enforce strong password policies and multi-factor authentication for all user logins."
+#     },
+#     {
+#         "trigger_keywords": ["upload", "file", "document", "attachment"],
+#         "category": "Integrity - File Validation",
+#         "recommendation": "The system shall validate and scan uploaded files for malicious content before processing."
+#     },
+#     {
+#         "trigger_keywords": ["payment", "transaction", "checkout", "billing", "credit card"],
+#         "category": "Confidentiality - Data Encryption",
+#         "recommendation": "The system shall encrypt all payment and transaction data both in transit and at rest."
+#     },
+#     {
+#         "trigger_keywords": ["report", "export", "download data", "generate report"],
+#         "category": "Confidentiality - Access Control",
+#         "recommendation": "The system shall restrict report generation and data export to authorized roles only."
+#     },
+#     {
+#         "trigger_keywords": ["update", "edit", "modify", "delete", "change record"],
+#         "category": "Integrity - Change Tracking",
+#         "recommendation": "The system shall maintain an audit log of all create, update, and delete operations on critical records."
+#     },
+#     {
+#         "trigger_keywords": ["api", "integration", "third-party", "external service"],
+#         "category": "Confidentiality - API Security",
+#         "recommendation": "The system shall authenticate and authorize all API requests using secure tokens (e.g., JWT/OAuth)."
+#     },
+#     {
+#         "trigger_keywords": ["server", "uptime", "availability", "performance", "load"],
+#         "category": "Availability - Resilience",
+#         "recommendation": "The system shall implement redundancy and failover mechanisms to ensure continuous availability."
+#     },
+#     {
+#         "trigger_keywords": ["user data", "personal information", "profile", "customer data"],
+#         "category": "Confidentiality - Data Privacy",
+#         "recommendation": "The system shall comply with data privacy regulations (e.g., GDPR) when storing personal information."
+#     },
+#     {
+#         "trigger_keywords": ["search", "query", "filter", "input"],
+#         "category": "Integrity - Input Validation",
+#         "recommendation": "The system shall sanitize and validate all user input to prevent injection attacks."
+#     },
+#     {
+#         "trigger_keywords": ["notification", "email", "sms", "alert"],
+#         "category": "Confidentiality - Communication Security",
+#         "recommendation": "The system shall ensure notification channels do not leak sensitive information to unintended recipients."
+#     },
+# ]
+ 
+# def recommend_security_requirements(functional_sentences):
+#     """
+#     Analyzes functional requirements to detect 'hidden' security needs
+#     using keyword matching combined with the classification engine.
+#     """
+#     recommendations = []
+#     for sentence in functional_sentences:
+#         sentence_lower = sentence.lower()
+#         matched_rules = []
+#         for rule in RECOMMENDATION_RULES:
+#             if any(kw in sentence_lower for kw in rule["trigger_keywords"]):
+#                 matched_rules.append(rule)
+ 
+#         for rule in matched_rules:
+#             recommendations.append({
+#                 "Functional Requirement": sentence,
+#                 "Detected Security Gap": rule["category"],
+#                 "Recommended Security Requirement": rule["recommendation"]
+#             })
+ 
+#     return pd.DataFrame(recommendations).drop_duplicates() if recommendations else pd.DataFrame(
+#         columns=["Functional Requirement", "Detected Security Gap", "Recommended Security Requirement"]
+#     )
+
+#Classification Functions------------------------------------------------------------
+
 def phase1_classify(sentence, classifier):
-    """
-    Phase I: Binary classification using fine-tuned RoBERTa-base.
-    Trained on PROMISE NFR dataset (F vs SE labels).
-    Returns predicted label and confidence score for that label.
-    """
-    results = classifier(sentence)[0]  # list of {label, score} dicts
-    # Find the winning label
+    results = classifier(sentence)[0]
     best = max(results, key=lambda x: x["score"])
-    # Map model output label (LABEL_0/LABEL_1 or Functional/Security)
-    raw_label = best["label"]
-    if raw_label in PHASE1_ID2LABEL.values():
-        label = raw_label
+    raw = best["label"]
+    if raw in PHASE1_ID2LABEL.values():
+        label = raw
     else:
-        # Handle LABEL_0 / LABEL_1 format
-        label_id = int(raw_label.split("_")[-1])
-        label = PHASE1_ID2LABEL[label_id]
+        label = PHASE1_ID2LABEL[int(raw.split("_")[-1])]
     return label, best["score"]
  
 def phase2_classify(sentence, classifier):
-    """Phase II: Fine-grained CIA Triad classification (Security sentences only)."""
-    candidate_labels = [
-        "confidentiality - data access control and privacy",
-        "integrity - data accuracy and prevention of unauthorized modification",
-        "availability - system and data accessibility and uptime"
-    ]
-    result = classifier(sentence, candidate_labels)
-    label_map = {
-        "confidentiality - data access control and privacy": "Confidentiality",
-        "integrity - data accuracy and prevention of unauthorized modification": "Integrity",
-        "availability - system and data accessibility and uptime": "Availability"
-    }
-    top_label = result['labels'][0]
-    top_score = result['scores'][0]
-    return label_map[top_label], top_score
- 
+    results = classifier(sentence)[0]
+    best = max(results, key=lambda x: x["score"])
+    raw = best["label"]
+    if raw in PHASE2_ID2LABEL.values():
+        label = raw
+    else:
+        label = PHASE2_ID2LABEL[int(raw.split("_")[-1])]
+    return label, best["score"]
  
 def classify_requirements(sentences):
     phase1_classifier, phase2_classifier = load_models()
     results = []
     progress = st.progress(0)
-    status = st.empty()
+    status   = st.empty()
  
     for i, sentence in enumerate(sentences):
         status.write(f"Analysing sentence {i+1} of {len(sentences)}...")
@@ -246,105 +283,153 @@ def classify_requirements(sentences):
         if len(sentence.split()) < 3:
             continue
  
-        phase1_label, phase1_score = phase1_classify(sentence, phase1_classifier)
+        p1_label, p1_score = phase1_classify(sentence, phase1_classifier)
  
-        if phase1_label == "Security":
-            phase2_label, phase2_score = phase2_classify(sentence, phase2_classifier)
+        if p1_label == "Security":
+            p2_label, p2_score = phase2_classify(sentence, phase2_classifier)
         else:
-            phase2_label = "N/A"
-            phase2_score = None
+            p2_label, p2_score = "N/A", None
  
         results.append({
-            "Sentence": sentence,
-            "Phase I (Type)": phase1_label,
-            "Phase I Confidence": phase1_score,
-            "Phase II (CIA)": phase2_label,
-            "Phase II Confidence": phase2_score
+            "Sentence":            sentence,
+            "Phase I (Type)":      p1_label,
+            "Phase I Confidence":  p1_score,
+            "Phase II (CIA)":      p2_label,
+            "Phase II Confidence": p2_score,
         })
  
     progress.empty()
     status.empty()
     return pd.DataFrame(results)
 
-#Recommendations part--------------------------------------------------------------
-RECOMMENDATION_RULES = [
-    {
-        "trigger_keywords": ["password", "login", "log in", "sign in", "credential"],
-        "category": "Confidentiality - Authentication",
-        "recommendation": "The system shall enforce strong password policies and multi-factor authentication for all user logins."
-    },
-    {
-        "trigger_keywords": ["upload", "file", "document", "attachment"],
-        "category": "Integrity - File Validation",
-        "recommendation": "The system shall validate and scan uploaded files for malicious content before processing."
-    },
-    {
-        "trigger_keywords": ["payment", "transaction", "checkout", "billing", "credit card"],
-        "category": "Confidentiality - Data Encryption",
-        "recommendation": "The system shall encrypt all payment and transaction data both in transit and at rest."
-    },
-    {
-        "trigger_keywords": ["report", "export", "download data", "generate report"],
-        "category": "Confidentiality - Access Control",
-        "recommendation": "The system shall restrict report generation and data export to authorized roles only."
-    },
-    {
-        "trigger_keywords": ["update", "edit", "modify", "delete", "change record"],
-        "category": "Integrity - Change Tracking",
-        "recommendation": "The system shall maintain an audit log of all create, update, and delete operations on critical records."
-    },
-    {
-        "trigger_keywords": ["api", "integration", "third-party", "external service"],
-        "category": "Confidentiality - API Security",
-        "recommendation": "The system shall authenticate and authorize all API requests using secure tokens (e.g., JWT/OAuth)."
-    },
-    {
-        "trigger_keywords": ["server", "uptime", "availability", "performance", "load"],
-        "category": "Availability - Resilience",
-        "recommendation": "The system shall implement redundancy and failover mechanisms to ensure continuous availability."
-    },
-    {
-        "trigger_keywords": ["user data", "personal information", "profile", "customer data"],
-        "category": "Confidentiality - Data Privacy",
-        "recommendation": "The system shall comply with data privacy regulations (e.g., GDPR) when storing personal information."
-    },
-    {
-        "trigger_keywords": ["search", "query", "filter", "input"],
-        "category": "Integrity - Input Validation",
-        "recommendation": "The system shall sanitize and validate all user input to prevent injection attacks."
-    },
-    {
-        "trigger_keywords": ["notification", "email", "sms", "alert"],
-        "category": "Confidentiality - Communication Security",
-        "recommendation": "The system shall ensure notification channels do not leak sensitive information to unintended recipients."
-    },
-]
- 
-def recommend_security_requirements(functional_sentences):
-    """
-    Analyzes functional requirements to detect 'hidden' security needs
-    using keyword matching combined with the classification engine.
-    """
-    recommendations = []
-    for sentence in functional_sentences:
-        sentence_lower = sentence.lower()
-        matched_rules = []
-        for rule in RECOMMENDATION_RULES:
-            if any(kw in sentence_lower for kw in rule["trigger_keywords"]):
-                matched_rules.append(rule)
- 
-        for rule in matched_rules:
-            recommendations.append({
-                "Functional Requirement": sentence,
-                "Detected Security Gap": rule["category"],
-                "Recommended Security Requirement": rule["recommendation"]
-            })
- 
-    return pd.DataFrame(recommendations).drop_duplicates() if recommendations else pd.DataFrame(
-        columns=["Functional Requirement", "Detected Security Gap", "Recommended Security Requirement"]
-    )
+#Evaluation------------------------------------------------------------------------
 
-
+def evaluate_model(dataset):
+    phase1_classifier, phase2_classifier = load_models()
+ 
+    true_p1, pred_p1 = [], []
+    true_p2, pred_p2 = [], []
+ 
+    progress = st.progress(0)
+    status   = st.empty()
+ 
+    for i, (sentence, true_l1, true_l2) in enumerate(dataset):
+        status.write(f"Evaluating sentence {i+1} of {len(dataset)}...")
+        progress.progress((i + 1) / len(dataset))
+ 
+        p1, _ = phase1_classify(sentence, phase1_classifier)
+        true_p1.append(true_l1)
+        pred_p1.append(p1)
+ 
+        if true_l1 == "Security" and true_l2 != "N/A":
+            p2, _ = phase2_classify(sentence, phase2_classifier)
+            true_p2.append(true_l2)
+            pred_p2.append(p2)
+ 
+    progress.empty()
+    status.empty()
+ 
+    # ── Phase I metrics ───────────────────────────────────────────────────
+    st.write("### Phase I — Binary Classification Metrics")
+    st.caption("Security vs Functional")
+ 
+    p1_acc  = accuracy_score(true_p1, pred_p1)
+    p1_prec = precision_score(true_p1, pred_p1, pos_label="Security", zero_division=0)
+    p1_rec  = recall_score(true_p1, pred_p1, pos_label="Security", zero_division=0)
+    p1_f1   = f1_score(true_p1, pred_p1, pos_label="Security", zero_division=0)
+ 
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Accuracy",  f"{p1_acc:.2%}")
+    c2.metric("Precision", f"{p1_prec:.2%}")
+    c3.metric("Recall",    f"{p1_rec:.2%}")
+    c4.metric("F1-Score",  f"{p1_f1:.2%}", delta=f"{(p1_f1-TARGET_F1):+.2%} vs target")
+ 
+    if p1_f1 >= TARGET_F1:
+        st.success(f"Phase I F1 ({p1_f1:.2%}) meets target of {TARGET_F1:.0%}")
+    else:
+        st.warning(f"Phase I F1 ({p1_f1:.2%}) is below target of {TARGET_F1:.0%}")
+ 
+    with st.expander("Phase I Confusion Matrix"):
+        cm1 = confusion_matrix(true_p1, pred_p1, labels=["Security", "Functional"])
+        cm1_df = pd.DataFrame(cm1,
+            index=["Actual: Security", "Actual: Functional"],
+            columns=["Predicted: Security", "Predicted: Functional"])
+        st.dataframe(cm1_df)
+        fig, ax = plt.subplots()
+        ax.imshow(cm1, cmap="Blues")
+        ax.set_xticks([0,1]); ax.set_xticklabels(["Security","Functional"])
+        ax.set_yticks([0,1]); ax.set_yticklabels(["Security","Functional"])
+        ax.set_xlabel("Predicted"); ax.set_ylabel("Actual")
+        for i in range(2):
+            for j in range(2):
+                ax.text(j, i, cm1[i,j], ha="center", va="center")
+        ax.set_title("Phase I Confusion Matrix")
+        st.pyplot(fig)
+ 
+    # ── Phase II metrics ──────────────────────────────────────────────────
+    st.write("### Phase II — CIA Triad Classification Metrics")
+ 
+    if not true_p2:
+        st.warning("No CIA ground-truth labels available — Phase II metrics cannot be computed.")
+    else:
+        p2_acc  = accuracy_score(true_p2, pred_p2)
+        p2_prec = precision_score(true_p2, pred_p2, average="macro", zero_division=0)
+        p2_rec  = recall_score(true_p2, pred_p2, average="macro", zero_division=0)
+        p2_f1   = f1_score(true_p2, pred_p2, average="macro", zero_division=0)
+ 
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Accuracy",  f"{p2_acc:.2%}")
+        c2.metric("Precision", f"{p2_prec:.2%}")
+        c3.metric("Recall",    f"{p2_rec:.2%}")
+        c4.metric("F1-Score",  f"{p2_f1:.2%}", delta=f"{(p2_f1-TARGET_F1):+.2%} vs target")
+ 
+        if p2_f1 >= TARGET_F1:
+            st.success(f"Phase II F1 ({p2_f1:.2%}) meets target of {TARGET_F1:.0%}")
+        else:
+            st.warning(f"Phase II F1 ({p2_f1:.2%}) is below target of {TARGET_F1:.0%}")
+ 
+        with st.expander("Phase II Confusion Matrix"):
+            cia = ["Confidentiality","Integrity","Availability"]
+            cm2 = confusion_matrix(true_p2, pred_p2, labels=cia)
+            cm2_df = pd.DataFrame(cm2,
+                index=[f"Actual: {l}" for l in cia],
+                columns=[f"Predicted: {l}" for l in cia])
+            st.dataframe(cm2_df)
+            fig2, ax2 = plt.subplots()
+            ax2.imshow(cm2, cmap="Greens")
+            ax2.set_xticks(range(3)); ax2.set_xticklabels(cia, rotation=20)
+            ax2.set_yticks(range(3)); ax2.set_yticklabels(cia)
+            for i in range(3):
+                for j in range(3):
+                    ax2.text(j, i, cm2[i,j], ha="center", va="center")
+            ax2.set_title("Phase II Confusion Matrix")
+            st.pyplot(fig2)
+ 
+    # ── Summary bar chart ─────────────────────────────────────────────────
+    st.write("### Overall Metrics Summary")
+    summary_df = pd.DataFrame({
+        "Phase":     ["Phase I (Binary)", "Phase II (CIA Triad)"],
+        "Accuracy":  [f"{p1_acc:.2%}",  f"{p2_acc:.2%}"  if true_p2 else "N/A"],
+        "Precision": [f"{p1_prec:.2%}", f"{p2_prec:.2%}" if true_p2 else "N/A"],
+        "Recall":    [f"{p1_rec:.2%}",  f"{p2_rec:.2%}"  if true_p2 else "N/A"],
+        "F1-Score":  [f"{p1_f1:.2%}",   f"{p2_f1:.2%}"  if true_p2 else "N/A"],
+    })
+    st.dataframe(summary_df, use_container_width=True)
+ 
+    if true_p2:
+        fig3, ax3 = plt.subplots()
+        metrics = ["Accuracy","Precision","Recall","F1-Score"]
+        v1 = [p1_acc, p1_prec, p1_rec, p1_f1]
+        v2 = [p2_acc, p2_prec, p2_rec, p2_f1]
+        x  = np.arange(len(metrics))
+        ax3.bar(x - 0.175, v1, 0.35, label="Phase I")
+        ax3.bar(x + 0.175, v2, 0.35, label="Phase II")
+        ax3.axhline(y=TARGET_F1, color="red", linestyle="--", label=f"Target ({TARGET_F1:.0%})")
+        ax3.set_xticks(x); ax3.set_xticklabels(metrics)
+        ax3.set_ylim(0, 1.1); ax3.legend()
+        ax3.set_title("Model Performance vs Target")
+        st.pyplot(fig3)
+ 
 #File reading (csv, txt files)-----------------------------------------------
 def read_uploaded_file(uploaded_file):
     name = uploaded_file.name.lower()
@@ -358,137 +443,6 @@ def read_uploaded_file(uploaded_file):
  
     return ""
 
-#Evaluation---------------------------------------------------------------------------
-TARGET_F1 = 0.92
- 
-def evaluate_model(dataset):
-    phase1_classifier, phase2_classifier = load_models()
- 
-    true_phase1, pred_phase1 = [], []
-    true_phase2, pred_phase2 = [], []
- 
-    progress = st.progress(0)
-    status = st.empty()
- 
-    for i, (sentence, true_p1, true_p2) in enumerate(dataset):
-        status.write(f"Evaluating sentence {i+1} of {len(dataset)}...")
-        progress.progress((i + 1) / len(dataset))
- 
-        pred_p1, _ = phase1_classify(sentence, phase1_classifier)
-        true_phase1.append(true_p1)
-        pred_phase1.append(pred_p1)
- 
-        if true_p1 == "Security":
-            pred_p2, _ = phase2_classify(sentence, phase2_classifier)
-            true_phase2.append(true_p2)
-            pred_phase2.append(pred_p2)
- 
-    progress.empty()
-    status.empty()
- 
-    # Phase I metrics
-    p1_accuracy  = accuracy_score(true_phase1, pred_phase1)
-    p1_precision = precision_score(true_phase1, pred_phase1, pos_label="Security", zero_division=0)
-    p1_recall    = recall_score(true_phase1, pred_phase1, pos_label="Security", zero_division=0)
-    p1_f1        = f1_score(true_phase1, pred_phase1, pos_label="Security", zero_division=0)
- 
-    st.write("### Phase I — Binary Classification Metrics")
-    st.caption("Security vs Functional")
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Accuracy",  f"{p1_accuracy:.2%}")
-    col2.metric("Precision", f"{p1_precision:.2%}")
-    col3.metric("Recall",    f"{p1_recall:.2%}")
-    col4.metric("F1-Score",  f"{p1_f1:.2%}", delta=f"{(p1_f1-TARGET_F1):+.2%} vs target")
- 
-    if p1_f1 >= TARGET_F1:
-        st.success(f"Phase I F1-Score ({p1_f1:.2%}) meets target of {TARGET_F1:.0%}")
-    else:
-        st.warning(f"Phase I F1-Score ({p1_f1:.2%}) is below target of {TARGET_F1:.0%}")
- 
-    with st.expander("Phase I Confusion Matrix"):
-        cm1 = confusion_matrix(true_phase1, pred_phase1, labels=["Security", "Functional"])
-        cm1_df = pd.DataFrame(cm1,
-            index=["Actual: Security", "Actual: Functional"],
-            columns=["Predicted: Security", "Predicted: Functional"])
-        st.dataframe(cm1_df)
- 
-        fig, ax = plt.subplots()
-        ax.imshow(cm1, cmap="Blues")
-        ax.set_xticks([0, 1]); ax.set_xticklabels(["Security", "Functional"])
-        ax.set_yticks([0, 1]); ax.set_yticklabels(["Security", "Functional"])
-        ax.set_xlabel("Predicted"); ax.set_ylabel("Actual")
-        for i in range(2):
-            for j in range(2):
-                ax.text(j, i, cm1[i, j], ha="center", va="center", color="black")
-        ax.set_title("Phase I Confusion Matrix")
-        st.pyplot(fig)
- 
-    # Phase II metrics
-    p2_accuracy  = accuracy_score(true_phase2, pred_phase2) if true_phase2 else 0
-    p2_precision = precision_score(true_phase2, pred_phase2, average="macro", zero_division=0) if true_phase2 else 0
-    p2_recall    = recall_score(true_phase2, pred_phase2, average="macro", zero_division=0) if true_phase2 else 0
-    p2_f1        = f1_score(true_phase2, pred_phase2, average="macro", zero_division=0) if true_phase2 else 0
- 
-    st.write("### Phase II — CIA Triad Classification Metrics")
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Accuracy",  f"{p2_accuracy:.2%}")
-    col2.metric("Precision", f"{p2_precision:.2%}")
-    col3.metric("Recall",    f"{p2_recall:.2%}")
-    col4.metric("F1-Score",  f"{p2_f1:.2%}", delta=f"{(p2_f1-TARGET_F1):+.2%} vs target")
- 
-    if p2_f1 >= TARGET_F1:
-        st.success(f"Phase II F1-Score ({p2_f1:.2%}) meets target of {TARGET_F1:.0%}")
-    else:
-        st.warning(f"Phase II F1-Score ({p2_f1:.2%}) is below target of {TARGET_F1:.0%}")
- 
-    if true_phase2:
-        with st.expander("Phase II Confusion Matrix"):
-            cia_labels = ["Confidentiality", "Integrity", "Availability"]
-            cm2 = confusion_matrix(true_phase2, pred_phase2, labels=cia_labels)
-            cm2_df = pd.DataFrame(cm2,
-                index=[f"Actual: {l}" for l in cia_labels],
-                columns=[f"Predicted: {l}" for l in cia_labels])
-            st.dataframe(cm2_df)
- 
-            fig2, ax2 = plt.subplots()
-            ax2.imshow(cm2, cmap="Greens")
-            ax2.set_xticks(range(3)); ax2.set_xticklabels(cia_labels, rotation=30)
-            ax2.set_yticks(range(3)); ax2.set_yticklabels(cia_labels)
-            ax2.set_xlabel("Predicted"); ax2.set_ylabel("Actual")
-            for i in range(3):
-                for j in range(3):
-                    ax2.text(j, i, cm2[i, j], ha="center", va="center", color="black")
-            ax2.set_title("Phase II Confusion Matrix")
-            st.pyplot(fig2)
- 
-    # Summary
-    st.write("###Overall Metrics Summary")
-    summary_df = pd.DataFrame({
-        "Phase": ["Phase I (Binary)", "Phase II (CIA Triad)"],
-        "Accuracy":  [f"{p1_accuracy:.2%}",  f"{p2_accuracy:.2%}"],
-        "Precision": [f"{p1_precision:.2%}", f"{p2_precision:.2%}"],
-        "Recall":    [f"{p1_recall:.2%}",    f"{p2_recall:.2%}"],
-        "F1-Score":  [f"{p1_f1:.2%}",        f"{p2_f1:.2%}"],
-        "Target F1": [f"{TARGET_F1:.0%}",    f"{TARGET_F1:.0%}"]
-    })
-    st.dataframe(summary_df, use_container_width=True)
- 
-    fig3, ax3 = plt.subplots()
-    metrics_names = ["Accuracy", "Precision", "Recall", "F1-Score"]
-    phase1_vals = [p1_accuracy, p1_precision, p1_recall, p1_f1]
-    phase2_vals = [p2_accuracy, p2_precision, p2_recall, p2_f1]
-    x = np.arange(len(metrics_names))
-    width = 0.35
-    ax3.bar(x - width/2, phase1_vals, width, label="Phase I")
-    ax3.bar(x + width/2, phase2_vals, width, label="Phase II")
-    ax3.axhline(y=TARGET_F1, color="red", linestyle="--", label=f"Target ({TARGET_F1:.0%})")
-    ax3.set_xticks(x); ax3.set_xticklabels(metrics_names)
-    ax3.set_ylim(0, 1.1)
-    ax3.set_title("Model Performance vs Target")
-    ax3.legend()
-    st.pyplot(fig3)
-    
-
 #UI part------------------------------------------------------------------------------------------
 st.title('Software Requirement Specification Identifier for Security-Related Requirements')
 
@@ -496,237 +450,206 @@ st.write('The system is to identify security-related requirements in the SRS')
 
 # Sidebar: model info
 with st.sidebar:
-    st.write("### ⚙️ Model Info")
-    st.write("**Phase I (Binary)**")
+    st.write("### Model Info")
+    st.write("**Phase I — Binary Classification**")
     st.code(PHASE1_MODEL_REPO, language=None)
-    st.caption("Fine-tuned RoBERTa-base · PROMISE NFR dataset · F1: 91.67%")
-    st.write("**Phase II (CIA Triad)**")
-    st.code("roberta-large-mnli", language=None)
-    st.caption("Zero-shot classification")
-    st.write("**PyTorch backend**")
+    st.caption("Fine-tuned RoBERTa-base · Functional vs Security")
+    st.write("**Phase II — CIA Triad**")
+    st.code(PHASE2_MODEL_REPO, language=None)
+    st.caption("Fine-tuned RoBERTa-base · C / I / A")
     import torch
-    st.caption(f"v{torch.__version__} · {'GPU' if torch.cuda.is_available() else 'CPU'}")
-    
-tab1, tab2, tab3, tab4 = st.tabs([
-    "Input & Preprocessing",
-    "Classification & Recommendations",
-    "Model Evaluation",
-    "Data Augmentation Demo"
-])
+    st.write("**Backend**")
+    st.caption(f"PyTorch {torch.__version__} · {'GPU' if torch.cuda.is_available() else 'CPU'}")
+ 
+st.write("---")
 
-#Tab 1: TEXT/FILE UPLOAD SECTION---------------------------------------------------------------
-with tab1:
-    st.write("##Text Input")
-    txt = st.text_area("Text to identify the requirements")
-    st.write(f"{len(txt)} characters | {len(txt.split())} words")
+#TEXT/FILE UPLOAD SECTION---------------------------------------------------------------
+
+st.write("## Text Input")
  
-    st.write("##SRS Document Upload")
-    st.caption("Supported formats: .csv, .txt")
-    uploaded_file = st.file_uploader(
-        "Choose file(s)", accept_multiple_files=True,
-        type=["csv", "txt"]
-    )
+txt = st.text_area(
+    "Paste SRS requirements text here",
+    height=150,
+    placeholder="e.g. The system shall authenticate users before granting access..."
+)
+st.caption(f"{len(txt)} characters | {len(txt.split())} words")
  
-    all_text = []
-    if txt.strip():
-        all_text.append(txt)
+uploaded_files = st.file_uploader(
+    "Or upload SRS file(s)",
+    accept_multiple_files=True,
+    type=["csv", "txt"]
+)
  
-    if uploaded_file:
-        for uf in uploaded_file:
-            try:
-                content = read_uploaded_file(uf)
+# Collect all input text
+all_text = []
+if txt.strip():
+    all_text.append(txt)
+if uploaded_files:
+    for uf in uploaded_files:
+        try:
+            content = read_uploaded_file(uf)
+            if content.strip():
                 all_text.append(content)
                 st.success(f"Loaded: {uf.name}")
-            except Exception as e:
-                st.error(f"Failed to load {uf.name}: {e}")
+        except Exception as e:
+            st.error(f"❌ Failed to load {uf.name}: {e}")
+
+st.write("")
+start = st.button("Start Identifying Requirements", type="primary", use_container_width=True)
  
-    if all_text:
+if start:
+    if not all_text:
+        st.warning("Please enter text or upload a file first.")
+    else:
         combined_text = "\n\n".join(all_text)
-        st.session_state["combined_text"] = combined_text
  
-        with st.expander("Raw Text Preview"):
-            st.text_area("Raw", combined_text[:1000] + "...", height=150)
+        # ── Preprocessing ─────────────────────────────────────────────────
+        st.write("---")
+        st.write("## Preprocessing")
  
         sentences, cleaned_sentences = preprocess_pipeline(combined_text)
-        st.session_state["sentences"] = sentences
-        st.session_state["cleaned_sentences"] = cleaned_sentences
  
-        with st.expander("Before vs After Comparison (incl. abbreviation expansion)"):
-            comparison_df = pd.DataFrame({
-                "Original/Expanded Sentence": sentences,
-                "Cleaned Sentence": cleaned_sentences
-            })
-            st.dataframe(comparison_df, use_container_width=True)
+        with st.expander("View raw text"):
+            st.text_area("Raw", combined_text[:1000] + ("..." if len(combined_text) > 1000 else ""), height=150)
  
-        st.write(f"**{len(cleaned_sentences)} sentences ready for analysis**")
-    else:
-        st.warning("Please enter text or upload a file to proceed.")
-        st.session_state["sentences"] = []
-
-#Tab 2: Classification and Recommendations------------------------------------------------
-with tab2:
-    sentences = st.session_state.get("sentences", [])
+        with st.expander("View before vs after cleaning"):
+            st.dataframe(pd.DataFrame({
+                "Original Sentence": sentences[:len(cleaned_sentences)],
+                "Cleaned Sentence":  cleaned_sentences
+            }), use_container_width=True)
  
-    if not sentences:
-        st.info("Add input in the **Input & Preprocessing** tab first.")
-    else:
-        st.write("##Two-Phase Classification")
-        if st.button("Run Classification"):
-            with st.spinner("Loading RoBERTa model (first run may take a minute)..."):
-                results_df = classify_requirements(sentences)
-            st.session_state["results_df"] = results_df
+        st.success(f"{len(sentences)} sentences extracted and preprocessed")
  
-        if "results_df" in st.session_state:
-            results_df = st.session_state["results_df"]
+        # ── Classification ────────────────────────────────────────────────
+        st.write("---")
+        st.write("## Classification Results")
  
-            total = len(results_df)
-            security_count = len(results_df[results_df["Phase I (Type)"] == "Security"])
-            functional_count = total - security_count
+        with st.spinner("Loading models and classifying..."):
+            results_df = classify_requirements(sentences)
  
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Total Sentences", total)
-            col2.metric("Security Requirements", security_count)
-            col3.metric("Functional Requirements", functional_count)
+        st.session_state["results_df"] = results_df
  
-            # Visual analytics
-            st.write("###Visual Analytics")
-            viz_col1, viz_col2 = st.columns(2)
+        total          = len(results_df)
+        security_count = len(results_df[results_df["Phase I (Type)"] == "Security"])
+        functional_count = total - security_count
  
-            with viz_col1:
-                fig1, ax1 = plt.subplots()
-                ax1.bar(["Security", "Functional"], [security_count, functional_count],
-                        color=["#d62728", "#1f77b4"])
-                ax1.set_title("Phase I: Security vs Functional")
-                ax1.set_ylabel("Count")
-                st.pyplot(fig1)
+        # Summary metrics
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Total Sentences",        total)
+        c2.metric("Security Requirements",  security_count)
+        c3.metric("Functional Requirements",functional_count)
  
-            with viz_col2:
-                cia_df = results_df[results_df["Phase II (CIA)"] != "N/A"]
-                if not cia_df.empty:
-                    cia_counts = cia_df["Phase II (CIA)"].value_counts()
-                    fig2, ax2 = plt.subplots()
-                    ax2.pie(cia_counts.values, labels=cia_counts.index, autopct="%1.1f%%",
-                            colors=["#2ca02c", "#ff7f0e", "#9467bd"])
-                    ax2.set_title("Phase II: CIA Triad Breakdown")
-                    st.pyplot(fig2)
-                else:
-                    st.info("No security requirements found to break down by CIA category.")
+        # ── Charts ────────────────────────────────────────────────────────
+        st.write("### Visual Analytics")
+        col1, col2 = st.columns(2)
  
-            # Display table with formatted confidence
-            display_df = results_df.copy()
-            display_df["Phase I Confidence"] = display_df["Phase I Confidence"].apply(lambda x: f"{x:.0%}")
-            display_df["Phase II Confidence"] = display_df["Phase II Confidence"].apply(
-                lambda x: f"{x:.0%}" if pd.notna(x) else "N/A")
+        with col1:
+            fig1, ax1 = plt.subplots()
+            ax1.bar(["Security","Functional"], [security_count, functional_count],
+                    color=["#d62728","#1f77b4"])
+            ax1.set_title("Phase I: Security vs Functional")
+            ax1.set_ylabel("Count")
+            st.pyplot(fig1)
  
-            st.write("###Full Classification Results")
-            st.dataframe(display_df, use_container_width=True)
- 
-            csv = display_df.to_csv(index=False)
-            st.download_button("Download Results as CSV", csv, "classification_results.csv", "text/csv")
- 
-            # ── Recommendation Logic ────────────────────────────────────────
-            st.write("---")
-            st.write("##Security Requirements Recommendations")
-            st.caption("Detecting hidden security needs in functional requirements")
- 
-            functional_sentences = results_df[results_df["Phase I (Type)"] == "Functional"]["Sentence"].tolist()
-            rec_df = recommend_security_requirements(functional_sentences)
- 
-            if not rec_df.empty:
-                st.write(f"**{len(rec_df)} potential security gaps detected**")
-                st.dataframe(rec_df, use_container_width=True)
- 
-                rec_csv = rec_df.to_csv(index=False)
-                st.download_button("⬇️ Download Recommendations as CSV", rec_csv,
-                                    "security_recommendations.csv", "text/csv")
-            else:
-                st.info("No obvious hidden security gaps detected in the functional requirements.")
- 
-            # ── Summary Report Export ───────────────────────────────────────
-            st.write("---")
-            st.write("##Summary Report")
-            report_lines = [
-                "AI-ASSISTED SECURITY REQUIREMENTS ANALYSIS REPORT",
-                "=" * 50,
-                f"Total Sentences Analysed: {total}",
-                f"Security Requirements: {security_count}",
-                f"Functional Requirements: {functional_count}",
-                "",
-                "CIA TRIAD BREAKDOWN:",
-            ]
+        with col2:
+            cia_df = results_df[results_df["Phase II (CIA)"] != "N/A"]
             if not cia_df.empty:
-                for cat, count in cia_df["Phase II (CIA)"].value_counts().items():
-                    report_lines.append(f"  - {cat}: {count}")
-            report_lines.append("")
-            report_lines.append(f"SECURITY RECOMMENDATIONS GENERATED: {len(rec_df)}")
-            report_lines.append("=" * 50)
+                cia_counts = cia_df["Phase II (CIA)"].value_counts()
+                fig2, ax2 = plt.subplots()
+                ax2.pie(cia_counts.values, labels=cia_counts.index, autopct="%1.1f%%",
+                        colors=["#2ca02c","#ff7f0e","#9467bd"])
+                ax2.set_title("Phase II: CIA Triad Breakdown")
+                st.pyplot(fig2)
+            else:
+                st.info("No security requirements found for CIA breakdown.")
  
-            report_text = "\n".join(report_lines)
-            st.text_area("Report Preview", report_text, height=250)
-            st.download_button("Download Summary Report (.txt)", report_text, "summary_report.txt", "text/plain")
-
-#Tab 3: Evaluation -------------------------------------------------------------------
-with tab3:
-    st.write("## Model Evaluation Metrics")
+        # ── Full results table ────────────────────────────────────────────
+        st.write("### Full Classification Table")
+        display_df = results_df.copy()
+        display_df["Phase I Confidence"]  = display_df["Phase I Confidence"].apply(lambda x: f"{x:.0%}")
+        display_df["Phase II Confidence"] = display_df["Phase II Confidence"].apply(
+            lambda x: f"{x:.0%}" if pd.notna(x) else "N/A")
+        st.dataframe(display_df, use_container_width=True)
  
-    promise_dataset = load_promise_nfr_dataset()
+        csv = display_df.to_csv(index=False)
+        st.download_button("⬇️ Download Results as CSV", csv, "classification_results.csv", "text/csv")
  
-    if not promise_dataset:
-        st.error(f"Could not load PROMISE NFR dataset from `{PROMISE_NFR_PATH}`. "
-                 "Make sure `data/nfr.txt` is placed alongside `streamlit_app.py`.")
-    else:
-        f_count = len([d for d in promise_dataset if d[1] == "Functional"])
-        se_count = len([d for d in promise_dataset if d[1] == "Security"])
-        st.info(f"Evaluating on {len(promise_dataset)} PROMISE NFR sentences "
-                f"({f_count} Functional, {se_count} Security). "
-                f"Target F1-Score: {TARGET_F1:.0%}")
+        # ── Summary Report ────────────────────────────────────────────────
+        st.write("---")
+        st.write("## Summary Report")
  
-        use_augmented = st.checkbox("Evaluate using augmented dataset (class-balanced)", value=False)
+        cia_breakdown = ""
+        if not cia_df.empty:
+            for cat, cnt in cia_df["Phase II (CIA)"].value_counts().items():
+                cia_breakdown += f"  - {cat}: {cnt}\n"
+        else:
+            cia_breakdown = "  None detected\n"
  
-        sample_size = st.slider(
-            "Number of sentences to evaluate (larger = slower, more accurate)",
-            min_value=20, max_value=len(promise_dataset),
-            value=min(50, len(promise_dataset)), step=10
-        )
+        report = f"""AI-ASSISTED SECURITY REQUIREMENTS ANALYSIS REPORT
+{"="*50}
+Total Sentences Analysed : {total}
+Security Requirements    : {security_count}
+Functional Requirements  : {functional_count}
  
-        if st.button("Run Evaluation"):
-            eval_dataset = promise_dataset
-            eval_dataset = random.sample(eval_dataset, sample_size)
-            if use_augmented:
-                eval_dataset = augment_minority_class(eval_dataset)
-            with st.spinner("Running evaluation..."):
-                evaluate_model(eval_dataset)
+CIA TRIAD BREAKDOWN:
+{cia_breakdown}
+{"="*50}"""
  
-
-#Tab 4: Demo----------------------------------------------------------------------
-with tab4:
-    st.write("##WordNet Synonym Augmentation Demo")
-    st.caption("Demonstrates how the minority class (Security requirements) is augmented to handle class imbalance.")
+        st.text_area("Report Preview", report, height=220)
+        st.download_button("Download Report (.txt)", report, "summary_report.txt", "text/plain")
  
-    security_only = [item for item in SAMPLE_DATASET if item[1] == "Security"]
-    functional_only = [item for item in SAMPLE_DATASET if item[1] == "Functional"]
+#Evaluation -------------------------------------------------------------------
+st.write("---")
+st.write("## Model Evaluation")
+st.caption(f"Evaluates both phases against the PROMISE NFR labelled dataset. Target F1: {TARGET_F1:.0%}")
  
-    col1, col2 = st.columns(2)
-    col1.metric("Original Security Count", len(security_only))
-    col2.metric("Original Functional Count", len(functional_only))
+promise_dataset = load_promise_nfr_dataset()
  
-    if st.button("Generate Augmented Samples"):
-        augmented_dataset = augment_minority_class(SAMPLE_DATASET)
-        new_security_count = len([item for item in augmented_dataset if item[1] == "Security"])
+if not promise_dataset:
+    st.error(f"PROMISE NFR dataset not found at `{PROMISE_NFR_PATH}`. Add `data/nfr.txt` alongside the app.")
+else:
+    f_count  = len([d for d in promise_dataset if d[1] == "Functional"])
+    se_count = len([d for d in promise_dataset if d[1] == "Security"])
+    st.info(f"{len(promise_dataset)} labelled sentences loaded — {f_count} Functional, {se_count} Security.")
  
-        st.success(f"Security class size: {len(security_only)} → {new_security_count} (after augmentation)")
+    use_aug   = st.checkbox("Use augmented dataset (class-balanced)", value=False)
+    sample_n  = st.slider("Sentences to evaluate", 20, len(promise_dataset),
+                          min(50, len(promise_dataset)), step=10)
  
-        aug_preview = []
-        for original, augmented in zip(security_only, augmented_dataset[len(SAMPLE_DATASET):]):
-            aug_preview.append({
-                "Original Sentence": original[0],
-                "Augmented Sentence": augmented[0],
-                "Label": augmented[1]
-            })
+    if st.button("Run Evaluation"):
+        eval_data = promise_dataset
+        eval_data = random.sample(eval_data, sample_n)
+        if use_aug:
+            eval_data = augment_minority_class(eval_data)
+        with st.spinner("Running evaluation..."):
+            evaluate_model(eval_data)
  
-        st.write("### Preview: Original vs Augmented")
-        st.dataframe(pd.DataFrame(aug_preview), use_container_width=True)
-
+#Demo----------------------------------------------------------------------
+st.write("---")
+st.write("## WordNet Synonym Augmentation Demo")
+st.caption("Shows how the minority Security class is augmented using synonym replacement to address class imbalance.")
+ 
+aug_data = load_promise_nfr_dataset()
+if aug_data:
+    sec_only  = [d for d in aug_data if d[1] == "Security"]
+    func_only = [d for d in aug_data if d[1] == "Functional"]
+ 
+    c1, c2 = st.columns(2)
+    c1.metric("Original Security Count",    len(sec_only))
+    c2.metric("Original Functional Count",  len(func_only))
+ 
+    if st.button("🔄 Generate Augmented Samples"):
+        aug_full = augment_minority_class(aug_data)
+        new_sec  = len([d for d in aug_full if d[1] == "Security"])
+        st.success(f"Security class: {len(sec_only)} → {new_sec} after augmentation")
+ 
+        preview = [{
+            "Original":  orig[0],
+            "Augmented": aug[0],
+            "Label":     aug[1]
+        } for orig, aug in zip(sec_only, aug_full[len(aug_data):])]
+        st.dataframe(pd.DataFrame(preview), use_container_width=True)
+ 
 #dumpppppppppppppppppp
 # st.info('Text / SRS File Upload')
 
