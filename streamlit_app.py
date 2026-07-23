@@ -5,9 +5,9 @@ import nltk
 import re
 import matplotlib.pyplot as plt
 from transformers import pipeline
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
+#from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 import random
-from collections import Counter
+#from collections import Counter
 
 # download NLTK data
 nltk.download('punkt')
@@ -92,7 +92,7 @@ def load_promise_nfr_dataset(filepath=PROMISE_NFR_PATH):
             dataset.append((text, label_map[raw_label], "N/A"))
     return dataset
  
-#Word-Net Synonym Augmentation (Class Imbalance Handling)--------------------------------
+#Word-Net Synonym Augmentation (Class Imbalance Handling)------------------------------
 def get_synonym(word):
     synsets = wordnet.synsets(word)
     if not synsets:
@@ -337,7 +337,7 @@ def evaluate_model(dataset):
     progress.empty()
     status.empty()
  
-    # ── Phase I metrics ───────────────────────────────────────────────────
+    # Phase I metrics 
     st.write("### Phase I — Binary Classification Metrics")
     st.caption("Security vs Functional")
  
@@ -374,7 +374,7 @@ def evaluate_model(dataset):
         ax.set_title("Phase I Confusion Matrix")
         st.pyplot(fig)
  
-    # ── Phase II metrics ──────────────────────────────────────────────────
+    # Phase II metrics 
     st.write("### Phase II — CIA Triad Classification Metrics")
  
     if not true_p2:
@@ -413,7 +413,7 @@ def evaluate_model(dataset):
             ax2.set_title("Phase II Confusion Matrix")
             st.pyplot(fig2)
  
-    # ── Summary bar chart ─────────────────────────────────────────────────
+    #Summary bar chart 
     st.write("### Overall Metrics Summary")
     summary_df = pd.DataFrame({
         "Phase":     ["Phase I (Binary)", "Phase II (CIA Triad)"],
@@ -464,7 +464,7 @@ with st.sidebar:
     st.caption("Fine-tuned RoBERTa-base · Functional vs Security")
     st.write("**Phase II — CIA Triad**")
     st.code(PHASE2_MODEL_REPO, language=None)
-    st.caption("Fine-tuned RoBERTa-base · C / I / A")
+    st.caption("Fine-tuned RoBERTa-base | C/I/A")
     import torch
     st.write("**Backend**")
     st.caption(f"PyTorch {torch.__version__} · {'GPU' if torch.cuda.is_available() else 'CPU'}")
@@ -500,7 +500,7 @@ if uploaded_files:
                 all_text.append(content)
                 st.success(f"Loaded: {uf.name}")
         except Exception as e:
-            st.error(f"❌ Failed to load {uf.name}: {e}")
+            st.error(f"Failed to load {uf.name}: {e}")
 
 st.write("")
 start = st.button("Start Identifying Requirements", type="primary", use_container_width=True)
@@ -511,7 +511,7 @@ if start:
     else:
         combined_text = "\n\n".join(all_text)
  
-        # ── Preprocessing ─────────────────────────────────────────────────
+        # Preprocessing 
         st.write("---")
         st.write("## Preprocessing")
  
@@ -528,7 +528,7 @@ if start:
  
         st.success(f"{len(sentences)} sentences extracted and preprocessed")
  
-        # ── Classification ────────────────────────────────────────────────
+        #Classification 
         st.write("---")
         st.write("## Classification Results")
  
@@ -547,7 +547,7 @@ if start:
         c2.metric("Security Requirements",  security_count)
         c3.metric("Functional Requirements",functional_count)
  
-        # ── Charts ────────────────────────────────────────────────────────
+        #Charts 
         st.write("### Visual Analytics")
         col1, col2 = st.columns(2)
  
@@ -571,7 +571,7 @@ if start:
             else:
                 st.info("No security requirements found for CIA breakdown.")
  
-        # ── Full results table ────────────────────────────────────────────
+        # Full results table
         st.write("### Full Classification Table")
         display_df = results_df.copy()
         display_df["Phase I Confidence"]  = display_df["Phase I Confidence"].apply(lambda x: f"{x:.0%}")
@@ -582,7 +582,7 @@ if start:
         csv = display_df.to_csv(index=False)
         st.download_button("⬇️ Download Results as CSV", csv, "classification_results.csv", "text/csv")
  
-        # ── Summary Report ────────────────────────────────────────────────
+        # Summary Report
         st.write("---")
         st.write("## Summary Report")
  
@@ -605,58 +605,63 @@ CIA TRIAD BREAKDOWN:
  
         st.text_area("Report Preview", report, height=220)
         st.download_button("Download Report (.txt)", report, "summary_report.txt", "text/plain")
- 
-#Evaluation -------------------------------------------------------------------
+
+# Footer------------------------------------------------------------------------
+
 st.write("---")
-st.write("## Model Evaluation")
-st.caption(f"Evaluates both phases against the PROMISE NFR labelled dataset. Target F1: {TARGET_F1:.0%}")
+st.caption("AI-Assisted Security Requirements Identifier | RoBERTa-base | Two-Phase Classification")
+
+# #Evaluation -------------------------------------------------------------------
+# st.write("---")
+# st.write("## Model Evaluation")
+# st.caption(f"Evaluates both phases against the PROMISE NFR labelled dataset. Target F1: {TARGET_F1:.0%}")
  
-promise_dataset = load_promise_nfr_dataset()
+# promise_dataset = load_promise_nfr_dataset()
  
-if not promise_dataset:
-    st.error(f"PROMISE NFR dataset not found at `{PROMISE_NFR_PATH}`. Add `data/nfr.txt` alongside the app.")
-else:
-    f_count  = len([d for d in promise_dataset if d[1] == "Functional"])
-    se_count = len([d for d in promise_dataset if d[1] == "Security"])
-    st.info(f"{len(promise_dataset)} labelled sentences loaded — {f_count} Functional, {se_count} Security.")
+# if not promise_dataset:
+#     st.error(f"PROMISE NFR dataset not found at `{PROMISE_NFR_PATH}`. Add `data/nfr.txt` alongside the app.")
+# else:
+#     f_count  = len([d for d in promise_dataset if d[1] == "Functional"])
+#     se_count = len([d for d in promise_dataset if d[1] == "Security"])
+#     st.info(f"{len(promise_dataset)} labelled sentences loaded — {f_count} Functional, {se_count} Security.")
  
-    use_aug   = st.checkbox("Use augmented dataset (class-balanced)", value=False)
-    sample_n  = st.slider("Sentences to evaluate", 20, len(promise_dataset),
-                          min(50, len(promise_dataset)), step=10)
+#     use_aug   = st.checkbox("Use augmented dataset (class-balanced)", value=False)
+#     sample_n  = st.slider("Sentences to evaluate", 20, len(promise_dataset),
+#                           min(50, len(promise_dataset)), step=10)
  
-    if st.button("Run Evaluation"):
-        eval_data = promise_dataset
-        eval_data = random.sample(eval_data, sample_n)
-        if use_aug:
-            eval_data = augment_minority_class(eval_data)
-        with st.spinner("Running evaluation..."):
-            evaluate_model(eval_data)
+#     if st.button("Run Evaluation"):
+#         eval_data = promise_dataset
+#         eval_data = random.sample(eval_data, sample_n)
+#         if use_aug:
+#             eval_data = augment_minority_class(eval_data)
+#         with st.spinner("Running evaluation..."):
+#             evaluate_model(eval_data)
  
-#Demo----------------------------------------------------------------------
-st.write("---")
-st.write("## WordNet Synonym Augmentation Demo")
-st.caption("Shows how the minority Security class is augmented using synonym replacement to address class imbalance.")
+# #Demo----------------------------------------------------------------------
+# st.write("---")
+# st.write("## WordNet Synonym Augmentation Demo")
+# st.caption("Shows how the minority Security class is augmented using synonym replacement to address class imbalance.")
  
-aug_data = load_promise_nfr_dataset()
-if aug_data:
-    sec_only  = [d for d in aug_data if d[1] == "Security"]
-    func_only = [d for d in aug_data if d[1] == "Functional"]
+# aug_data = load_promise_nfr_dataset()
+# if aug_data:
+#     sec_only  = [d for d in aug_data if d[1] == "Security"]
+#     func_only = [d for d in aug_data if d[1] == "Functional"]
  
-    c1, c2 = st.columns(2)
-    c1.metric("Original Security Count",    len(sec_only))
-    c2.metric("Original Functional Count",  len(func_only))
+#     c1, c2 = st.columns(2)
+#     c1.metric("Original Security Count",    len(sec_only))
+#     c2.metric("Original Functional Count",  len(func_only))
  
-    if st.button("🔄 Generate Augmented Samples"):
-        aug_full = augment_minority_class(aug_data)
-        new_sec  = len([d for d in aug_full if d[1] == "Security"])
-        st.success(f"Security class: {len(sec_only)} → {new_sec} after augmentation")
+#     if st.button("🔄 Generate Augmented Samples"):
+#         aug_full = augment_minority_class(aug_data)
+#         new_sec  = len([d for d in aug_full if d[1] == "Security"])
+#         st.success(f"Security class: {len(sec_only)} → {new_sec} after augmentation")
  
-        preview = [{
-            "Original":  orig[0],
-            "Augmented": aug[0],
-            "Label":     aug[1]
-        } for orig, aug in zip(sec_only, aug_full[len(aug_data):])]
-        st.dataframe(pd.DataFrame(preview), use_container_width=True)
+#         preview = [{
+#             "Original":  orig[0],
+#             "Augmented": aug[0],
+#             "Label":     aug[1]
+#         } for orig, aug in zip(sec_only, aug_full[len(aug_data):])]
+#         st.dataframe(pd.DataFrame(preview), use_container_width=True)
  
 #dumpppppppppppppppppp
 # st.info('Text / SRS File Upload')
