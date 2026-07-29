@@ -133,20 +133,59 @@ def expand_abbreviations(text):
         clean = re.sub(r"[^\w]", "", word.lower())
         expanded.append(ABBREVIATION_DICT.get(clean, word))
     return " ".join(expanded)
+
+def split_requirements(text):
+    
+    # Split on newlines — most SRS docs have one requirement per line
+    lines = [l.strip() for l in text.splitlines() if l.strip()]
  
-def clean_sentence(sentence):
-    sentence = sentence.lower()
-    sentence = re.sub(r"[^a-z\s]", "", sentence)
-    sentence = re.sub(r"\s+", " ", sentence).strip()
-    tokens = [w for w in sentence.split() if w not in STOP_WORDS]
-    return " ".join(tokens)
+    requirements = []
+    for line in lines:
+        word_count = len(line.split())
+        if word_count > 40:
+            # Long line — likely multiple requirements, use sent_tokenize
+            sub_sentences = sent_tokenize(line)
+            requirements.extend(sub_sentences)
+        else:
+            # Normal length — treat whole line as one requirement
+            requirements.append(line)
+ 
+    # If no newlines found (user pasted a block of text), fall back to sent_tokenize
+    if len(requirements) <= 1 and len(text.split()) > 20:
+        requirements = sent_tokenize(text)
+ 
+    return [r for r in requirements if r.strip()]
+ 
+def clean_for_display(sentence):
+    """
+    What is kept:
+      - Numbers (e.g. '99.9%', 'AES-256', '5 minutes') — carry meaning
+      - Important words like 'as', 'only', 'not', 'must' — affect security meaning
+      - Special characters that are part of technical terms
+    """
+    sentence = sentence.strip()
+    sentence = re.sub(r"\s+", " ", sentence)  # collapse whitespace only
+    return sentence
+ 
  
 def preprocess_pipeline(combined_text):
-    expanded = expand_abbreviations(combined_text)
-    sentences = sent_tokenize(expanded)
-    cleaned = [clean_sentence(s) for s in sentences]
-    pairs = [(o, c) for o, c in zip(sentences, cleaned) if c]
-    return [p[0] for p in pairs], [p[1] for p in pairs]
+    expanded_text = expand_abbreviations(combined_text)
+    sentences = split_requirements(expanded_text)
+ 
+    # Clean only for display — model always gets the original
+    cleaned_for_display = [clean_for_display(s) for s in sentences]
+ 
+    # Filter out empty/very short sentences
+    pairs = [
+        (orig, disp)
+        for orig, disp in zip(sentences, cleaned_for_display)
+        if len(orig.split()) >= 3
+    ]
+ 
+    originals = [p[0] for p in pairs]
+    display   = [p[1] for p in pairs]
+    return originals, display
+ 
  
 #MODEL--------------------------------------------------------------------------------------------
 PHASE1_MODEL_REPO = "naa18/srs-security-classifier-phase1"
@@ -248,7 +287,7 @@ def load_models():
 #         columns=["Functional Requirement", "Detected Security Gap", "Recommended Security Requirement"]
 #     )
 
-#Classification Functions------------------------------------------------------------
+#Classification Functions--------------------------------------------------------------
 
 def phase1_classify(sentence, classifier):
     raw = classifier(sentence)
@@ -611,136 +650,6 @@ CIA TRIAD BREAKDOWN:
 st.write("---")
 st.caption("AI-Assisted Security Requirements Identifier | RoBERTa-base | Two-Phase Classification")
 
-# #Evaluation -------------------------------------------------------------------
-# st.write("---")
-# st.write("## Model Evaluation")
-# st.caption(f"Evaluates both phases against the PROMISE NFR labelled dataset. Target F1: {TARGET_F1:.0%}")
- 
-# promise_dataset = load_promise_nfr_dataset()
- 
-# if not promise_dataset:
-#     st.error(f"PROMISE NFR dataset not found at `{PROMISE_NFR_PATH}`. Add `data/nfr.txt` alongside the app.")
-# else:
-#     f_count  = len([d for d in promise_dataset if d[1] == "Functional"])
-#     se_count = len([d for d in promise_dataset if d[1] == "Security"])
-#     st.info(f"{len(promise_dataset)} labelled sentences loaded — {f_count} Functional, {se_count} Security.")
- 
-#     use_aug   = st.checkbox("Use augmented dataset (class-balanced)", value=False)
-#     sample_n  = st.slider("Sentences to evaluate", 20, len(promise_dataset),
-#                           min(50, len(promise_dataset)), step=10)
- 
-#     if st.button("Run Evaluation"):
-#         eval_data = promise_dataset
-#         eval_data = random.sample(eval_data, sample_n)
-#         if use_aug:
-#             eval_data = augment_minority_class(eval_data)
-#         with st.spinner("Running evaluation..."):
-#             evaluate_model(eval_data)
- 
-# #Demo----------------------------------------------------------------------
-# st.write("---")
-# st.write("## WordNet Synonym Augmentation Demo")
-# st.caption("Shows how the minority Security class is augmented using synonym replacement to address class imbalance.")
- 
-# aug_data = load_promise_nfr_dataset()
-# if aug_data:
-#     sec_only  = [d for d in aug_data if d[1] == "Security"]
-#     func_only = [d for d in aug_data if d[1] == "Functional"]
- 
-#     c1, c2 = st.columns(2)
-#     c1.metric("Original Security Count",    len(sec_only))
-#     c2.metric("Original Functional Count",  len(func_only))
- 
-#     if st.button("🔄 Generate Augmented Samples"):
-#         aug_full = augment_minority_class(aug_data)
-#         new_sec  = len([d for d in aug_full if d[1] == "Security"])
-#         st.success(f"Security class: {len(sec_only)} → {new_sec} after augmentation")
- 
-#         preview = [{
-#             "Original":  orig[0],
-#             "Augmented": aug[0],
-#             "Label":     aug[1]
-#         } for orig, aug in zip(sec_only, aug_full[len(aug_data):])]
-#         st.dataframe(pd.DataFrame(preview), use_container_width=True)
- 
-#dumpppppppppppppppppp
-# st.info('Text / SRS File Upload')
-
-# #user input text
-# st.write('Text Input')
-# txt=st.text_area(
-#   "Text to identify the requirements"
-# )
-# st.write(f" {len(txt)} characters | {len(txt.split())} words")
-
-# #user file upload
-# st.write('File Upload')
-# uploaded_file=st.file_uploader(
-#   "Choose file(s)", accept_multiple_files=True,type=["csv","txt"]
-# )
-
-# #for text input
-# all_text=[]
-# if txt.strip():
-#   all_text.append(txt)
-  
-# #preprocess the files
-# if uploaded_file:
-  
-#   for uploaded_files in uploaded_file:
-#     st.write(f"{uploaded_files.name}")
-#     #if text
-#     if uploaded_files.name.endswith(".csv"):
-#         df=pd.read_csv(uploaded_files)
-#         string_data=df.to_string(index=False)
-  
-#     #if csv file
-#     elif uploaded_files.name.endswith(".txt"):
-#       string_data=uploaded_files.read().decode("utf-8",errors="ignore")
-
-#     all_text.append(string_data)
-#     st.success(f"Loaded: {uploaded_files.name}")
-
-# if all_text:
-#     combined_text="\n\n".join(all_text)
-#     #view text
-#     with st.expander("Raw Text Preview"):
-#         st.text_area("Raw", combined_text[:1000] + "...", height=150)
-        
-#     #sentence tokenization
-#     sentences = sent_tokenize(combined_text)
-      
-#   #noise reduction
-#     def clean_sentence(sentence):
-#         sentence = sentence.lower()
-#         sentence = re.sub(r"[^a-z\s]", "", sentence)
-#         sentence = re.sub(r"\s+", " ", sentence).strip()
-#         tokens = sentence.split()
-#         tokens = [word for word in tokens if word not in STOP_WORDS]
-#         return " ".join(tokens)
-
-#     cleaned_sentences = [clean_sentence(s) for s in sentences]
-#     cleaned_sentences = [s for s in cleaned_sentences if s]
-
-#       #before and after sentences comparison
-#     with st.expander("Before vs After Comparison"):
-#         comparison_df = pd.DataFrame({
-#             "Original Sentence": sentences[:len(cleaned_sentences)],
-#             "Cleaned Sentence": cleaned_sentences
-#         })
-#         st.dataframe(comparison_df)
-        
-#     st.write(f"{len(cleaned_sentences)} sentences ready for analysis")
-
-#     #classification SECTION---------------------------------------------------------------
-#     st.info("Classification of Requirements")
-    
-#     if st.button("Run"):
-#         with st.spinner("Loading (It may take a few minutes...)"):
-#             results_df = classify_requirements(sentences)
-            
-# else:
-#   st.warning("Please enter text or upload file(s) to proceed.")
 
 
 
