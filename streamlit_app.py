@@ -135,26 +135,26 @@ def expand_abbreviations(text):
     return " ".join(expanded)
 
 def split_requirements(text):
-    
-    # Split on newlines — most SRS docs have one requirement per line
+   
     lines = [l.strip() for l in text.splitlines() if l.strip()]
  
-    requirements = []
-    for line in lines:
-        word_count = len(line.split())
-        if word_count > 40:
-            # Long line — likely multiple requirements, use sent_tokenize
-            sub_sentences = sent_tokenize(line)
-            requirements.extend(sub_sentences)
-        else:
-            # Normal length — treat whole line as one requirement
-            requirements.append(line)
+    # Single block of text pasted without newlines
+    if len(lines) == 1 and len(text.split()) > 20:
+        # Remove content inside parentheses temporarily to find safe split points
+        temp = re.sub(r'\([^)]*\)', lambda m: 'X' * len(m.group()), text)
+        # Split on period+space+capital, but NOT after known abbreviations
+        parts = re.split(r'(?<!\b(?:e\.g|i\.e|etc|vs|Dr|Mr|Ms|No))\.\s+(?=[A-Z])', temp)
+        if len(parts) > 1:
+            # Apply split positions back to original text
+            positions = [0]
+            pos = 0
+            for part in parts[:-1]:
+                pos += len(part) + 2  # +2 for '. '
+                positions.append(pos)
+            positions.append(len(text))
+            lines = [text[positions[i]:positions[i+1]].strip() for i in range(len(parts))]
  
-    # If no newlines found (user pasted a block of text), fall back to sent_tokenize
-    if len(requirements) <= 1 and len(text.split()) > 20:
-        requirements = sent_tokenize(text)
- 
-    return [r for r in requirements if r.strip()]
+    return [r for r in lines if len(r.split()) >= 3]
  
 def clean_for_display(sentence):
     """
@@ -287,7 +287,7 @@ def load_models():
 #         columns=["Functional Requirement", "Detected Security Gap", "Recommended Security Requirement"]
 #     )
 
-#Classification Functions--------------------------------------------------------------
+#Classification Functions---------------------------------------------------------------
 
 def phase1_classify(sentence, classifier):
     raw = classifier(sentence)
@@ -610,18 +610,60 @@ if start:
             else:
                 st.info("No security requirements found for CIA breakdown.")
  
-        # Full results table
+         # ── Full results table ────────────────────────────────────────────
         st.write("### Full Classification Table")
         display_df = results_df.copy()
         display_df["Phase I Confidence"]  = display_df["Phase I Confidence"].apply(lambda x: f"{x:.0%}")
         display_df["Phase II Confidence"] = display_df["Phase II Confidence"].apply(
             lambda x: f"{x:.0%}" if pd.notna(x) else "N/A")
+ 
+        # Add short label columns — F/SE and C/I/A
+        display_df["Type Label"] = display_df["Phase I (Type)"].map(
+            {"Security": "SE", "Functional": "F"}
+        )
+        display_df["CIA Label"] = display_df["Phase II (CIA)"].map(
+            {"Confidentiality": "C", "Integrity": "I", "Availability": "A"}
+        ).fillna("-")
+ 
+        # Reorder for clarity
+        display_df = display_df[[
+            "Sentence",
+            "Type Label", "Phase I (Type)", "Phase I Confidence",
+            "CIA Label",  "Phase II (CIA)", "Phase II Confidence"
+        ]]
         st.dataframe(display_df, use_container_width=True)
  
-        csv = display_df.to_csv(index=False)
-        st.download_button("⬇️ Download Results as CSV", csv, "classification_results.csv", "text/csv")
+        # ── Format-aware download ─────────────────────────────────────
+        st.write("#### Download Results")
  
-        # Summary Report
+        input_was_csv = any(
+            uf.name.lower().endswith(".csv") for uf in uploaded_files
+        ) if uploaded_files else False
+ 
+        # Always offer CSV
+        csv_out = display_df.to_csv(index=False)
+        st.download_button(
+            "⬇️ Download as CSV",
+            csv_out, "classification_results.csv", "text/csv"
+        )
+ 
+        # Offer TXT if input was txt or text area
+        if not input_was_csv:
+            txt_lines = ["CLASSIFICATION RESULTS", "=" * 65,
+                         f"{'#':<4} {'Label':<6} {'CIA':<5} Requirement",
+                         "-" * 65]
+            for idx, row in display_df.reset_index().iterrows():
+                cia = row["CIA Label"] if row["CIA Label"] != "-" else "  -"
+                txt_lines.append(
+                    f"{idx+1:<4} {row['Type Label']:<6} {cia:<5} {row['Sentence']}"
+                )
+            txt_out = "\n".join(txt_lines)
+            st.download_button(
+                "⬇️ Download as TXT",
+                txt_out, "classification_results.txt", "text/plain"
+            )
+ 
+        # ── Summary Report ────────────────────────────────────────────────
         st.write("---")
         st.write("## Summary Report")
  
@@ -644,7 +686,7 @@ CIA TRIAD BREAKDOWN:
  
         st.text_area("Report Preview", report, height=220)
         st.download_button("Download Report (.txt)", report, "summary_report.txt", "text/plain")
-
+ 
 # Footer------------------------------------------------------------------------
 
 st.write("---")
