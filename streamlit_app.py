@@ -125,50 +125,64 @@ def augment_minority_class(dataset, minority_label="Security", label_index=1):
     return augmented
  
 #NLP Pre-processing pipeline-----------------------------------------------------
-
 def expand_abbreviations(text):
+    """Expands known SRS abbreviations before tokenization."""
     words = text.split()
     expanded = []
     for word in words:
         clean = re.sub(r"[^\w]", "", word.lower())
         expanded.append(ABBREVIATION_DICT.get(clean, word))
     return " ".join(expanded)
-
+ 
 def split_requirements(text):
    
     lines = [l.strip() for l in text.splitlines() if l.strip()]
  
     # Single block of text pasted without newlines
     if len(lines) == 1 and len(text.split()) > 20:
-        # Remove content inside parentheses temporarily to find safe split points
-        temp = re.sub(r'\([^)]*\)', lambda m: 'X' * len(m.group()), text)
-        # Split on period+space+capital, but NOT after known abbreviations
-        parts = re.split(r'(?<!\b(?:e\.g|i\.e|etc|vs|Dr|Mr|Ms|No))\.\s+(?=[A-Z])', temp)
-        if len(parts) > 1:
-            # Apply split positions back to original text
-            positions = [0]
-            pos = 0
-            for part in parts[:-1]:
-                pos += len(part) + 2  # +2 for '. '
-                positions.append(pos)
-            positions.append(len(text))
-            lines = [text[positions[i]:positions[i+1]].strip() for i in range(len(parts))]
+        # Known abbreviations that should never be split on
+        abbrevs = {"e.g", "i.e", "etc", "vs", "Dr", "Mr", "Ms", "No",
+                   "Fig", "fig", "Vol", "vol", "dept", "approx"}
+ 
+        # Find all candidate split positions manually (avoids regex lookbehind)
+        candidates = []
+        i = 0
+        paren_depth = 0
+        while i < len(text):
+            ch = text[i]
+            if ch == "(":
+                paren_depth += 1
+            elif ch == ")":
+                paren_depth -= 1
+            elif ch == "." and paren_depth == 0:
+                # Check what comes after the period
+                rest = text[i+1:]
+                if rest and rest[0] == " " and len(rest) > 1 and rest[1].isupper():
+                    # Check the word before the period is not an abbreviation
+                    word_before = re.search(r"(\w+)$", text[:i])
+                    if word_before and word_before.group(1) not in abbrevs:
+                        candidates.append(i)
+            i += 1
+ 
+        if candidates:
+            parts = []
+            prev = 0
+            for pos in candidates:
+                parts.append(text[prev:pos].strip())
+                prev = pos + 2  # skip ". "
+            parts.append(text[prev:].strip())
+            lines = [p for p in parts if p]
  
     return [r for r in lines if len(r.split()) >= 3]
  
 def clean_for_display(sentence):
-    """
-    What is kept:
-      - Numbers (e.g. '99.9%', 'AES-256', '5 minutes') — carry meaning
-      - Important words like 'as', 'only', 'not', 'must' — affect security meaning
-      - Special characters that are part of technical terms
-    """
+    
     sentence = sentence.strip()
     sentence = re.sub(r"\s+", " ", sentence)  # collapse whitespace only
     return sentence
  
- 
 def preprocess_pipeline(combined_text):
+   
     expanded_text = expand_abbreviations(combined_text)
     sentences = split_requirements(expanded_text)
  
