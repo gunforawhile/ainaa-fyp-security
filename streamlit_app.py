@@ -736,9 +736,9 @@ CIA TRIAD BREAKDOWN:
 
 if "results_df" in st.session_state:
     st.write("---")
-    st.write("### Start a New Classification")
-    st.caption("Click below to clear the current results and classify a new set of requirements.")
-    if st.button("Clear Results", type="secondary", use_container_width=True):
+    st.write("### Start a New Classification?")
+    st.caption("Clear current results and classify a new set of requirements.")
+    if st.button("Clear Results", type="primary", use_container_width=True):
         for key in ["results_df", "sentences", "cleaned_sentences", "combined_text", "input_was_csv"]:
             if key in st.session_state:
                 del st.session_state[key]
