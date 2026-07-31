@@ -302,35 +302,60 @@ def load_models():
 #         columns=["Functional Requirement", "Detected Security Gap", "Recommended Security Requirement"]
 #     )
 
-#Classification Functions---------------------------------------------------------------
+#Classification Functions----------------------------------------------------------------
 
 def phase1_classify(sentence, classifier):
-    raw = classifier(sentence)
-    if isinstance(raw[0], list):
-        results = raw[0]
-    else:
-        results = raw
-    best = max(results, key=lambda x: x["score"])
-    raw_label = best["label"]
-    if raw_label in PHASE1_ID2LABEL.values():
-        label = raw_label
-    else:
-        label = PHASE1_ID2LABEL[int(raw_label.split("_")[-1])]
-    return label, best["score"]
+    try:
+        raw = classifier(sentence)
+        results = raw[0] if isinstance(raw[0], list) else raw
+        best = max(results, key=lambda x: x["score"])
+        raw_label = best["label"]
+        if raw_label in PHASE1_ID2LABEL.values():
+            label = raw_label
+        else:
+            label = PHASE1_ID2LABEL[int(raw_label.split("_")[-1])]
+        return label, best["score"]
+    except Exception:
+        # Fallback: truncate to first 100 words and retry
+        short = " ".join(sentence.split()[:100])
+        try:
+            raw = classifier(short)
+            results = raw[0] if isinstance(raw[0], list) else raw
+            best = max(results, key=lambda x: x["score"])
+            raw_label = best["label"]
+            if raw_label in PHASE1_ID2LABEL.values():
+                label = raw_label
+            else:
+                label = PHASE1_ID2LABEL[int(raw_label.split("_")[-1])]
+            return label, best["score"]
+        except Exception:
+            return "Functional", 0.0
  
 def phase2_classify(sentence, classifier):
-    raw = classifier(sentence)
-    if isinstance(raw[0], list):
-        results = raw[0]
-    else:
-        results = raw
-    best = max(results, key=lambda x: x["score"])
-    raw_label = best["label"]
-    if raw_label in PHASE2_ID2LABEL.values():
-        label = raw_label
-    else:
-        label = PHASE2_ID2LABEL[int(raw_label.split("_")[-1])]
-    return label, best["score"]
+    try:
+        raw = classifier(sentence)
+        results = raw[0] if isinstance(raw[0], list) else raw
+        best = max(results, key=lambda x: x["score"])
+        raw_label = best["label"]
+        if raw_label in PHASE2_ID2LABEL.values():
+            label = raw_label
+        else:
+            label = PHASE2_ID2LABEL[int(raw_label.split("_")[-1])]
+        return label, best["score"]
+    except Exception:
+        short = " ".join(sentence.split()[:100])
+        try:
+            raw = classifier(short)
+            results = raw[0] if isinstance(raw[0], list) else raw
+            best = max(results, key=lambda x: x["score"])
+            raw_label = best["label"]
+            if raw_label in PHASE2_ID2LABEL.values():
+                label = raw_label
+            else:
+                label = PHASE2_ID2LABEL[int(raw_label.split("_")[-1])]
+            return label, best["score"]
+        except Exception:
+            return "Confidentiality", 0.0
  
 def classify_requirements(sentences):
     phase1_classifier, phase2_classifier = load_models()
