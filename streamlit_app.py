@@ -588,133 +588,138 @@ if start:
     if not all_text:
         st.warning("Please enter text or upload a file first.")
     else:
-        combined_text = "\n\n".join(all_text)
- 
-        # Preprocessing 
-        st.write("---")
-        st.write("## Preprocessing")
- 
+        combined_text = "\n\n".join(all_text) 
         sentences, cleaned_sentences = preprocess_pipeline(combined_text)
- 
-        with st.expander("View raw text"):
-            st.text_area("Raw", combined_text[:1000] + ("..." if len(combined_text) > 1000 else ""), height=150)
- 
-        with st.expander("View before vs after cleaning"):
-            st.dataframe(pd.DataFrame({
-                "Original Sentence": sentences[:len(cleaned_sentences)],
-                "Cleaned Sentence":  cleaned_sentences
-            }), use_container_width=True)
- 
-        st.success(f"{len(sentences)} sentences extracted and preprocessed")
- 
-        #Classification 
-        st.write("---")
-        st.write("## Classification Results")
  
         with st.spinner("Loading models and classifying..."):
             results_df = classify_requirements(sentences)
- 
-        st.session_state["results_df"] = results_df
- 
-        total          = len(results_df)
-        security_count = len(results_df[results_df["Phase I (Type)"] == "Security"])
-        functional_count = total - security_count
- 
-        # Summary metrics
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Total Sentences",        total)
-        c2.metric("Security Requirements",  security_count)
-        c3.metric("Functional Requirements",functional_count)
- 
-        #Charts 
-        st.write("### Visual Analytics")
-        col1, col2 = st.columns(2)
- 
-        with col1:
-            fig1, ax1 = plt.subplots()
-            ax1.bar(["Security","Functional"], [security_count, functional_count],
-                    color=["#d62728","#1f77b4"])
-            ax1.set_title("Phase I: Security vs Functional")
-            ax1.set_ylabel("Count")
-            st.pyplot(fig1)
- 
-        with col2:
-            cia_df = results_df[results_df["Phase II (CIA)"] != "N/A"]
-            if not cia_df.empty:
-                cia_counts = cia_df["Phase II (CIA)"].value_counts()
-                fig2, ax2 = plt.subplots()
-                ax2.pie(cia_counts.values, labels=cia_counts.index, autopct="%1.1f%%",
-                        colors=["#2ca02c","#ff7f0e","#9467bd"])
-                ax2.set_title("Phase II: CIA Triad Breakdown")
-                st.pyplot(fig2)
-            else:
-                st.info("No security requirements found for CIA breakdown.")
- 
-         # ── Full results table ────────────────────────────────────────────
-        st.write("### Full Classification Table")
-        display_df = results_df.copy()
-        display_df["Phase I Confidence"]  = display_df["Phase I Confidence"].apply(lambda x: f"{x:.0%}")
-        display_df["Phase II Confidence"] = display_df["Phase II Confidence"].apply(
-            lambda x: f"{x:.0%}" if pd.notna(x) else "N/A")
- 
-        # Add short label columns — F/SE and C/I/A
-        display_df["Type Label"] = display_df["Phase I (Type)"].map(
-            {"Security": "SE", "Functional": "F"}
-        )
-        display_df["CIA Label"] = display_df["Phase II (CIA)"].map(
-            {"Confidentiality": "C", "Integrity": "I", "Availability": "A"}
-        ).fillna("-")
- 
-        # Reorder for clarity
-        display_df = display_df[[
-            "Sentence",
-            "Type Label", "Phase I (Type)", "Phase I Confidence",
-            "CIA Label",  "Phase II (CIA)", "Phase II Confidence"
-        ]]
-        st.dataframe(display_df, use_container_width=True)
- 
-        # ── Format-aware download ─────────────────────────────────────
-        st.write("#### Download Results")
- 
-        input_was_csv = any(
+
+        #store all results in session_state
+        st.session_state["results_df"]        = results_df
+        st.session_state["sentences"]         = sentences
+        st.session_state["cleaned_sentences"] = cleaned_sentences
+        st.session_state["combined_text"]     = combined_text
+        st.session_state["input_was_csv"]     = any(
             uf.name.lower().endswith(".csv") for uf in uploaded_files
         ) if uploaded_files else False
+
+if "results_df" in st.session_state:
+    
+    results_df      = st.session_state["results_df"]
+    sentences       = st.session_state["sentences"]
+    cleaned_sentences = st.session_state["cleaned_sentences"]
+    combined_text   = st.session_state["combined_text"]
+    input_was_csv   = st.session_state["input_was_csv"]
+    
+    # Preprocessing 
+    st.write("---")
+    st.write("## Preprocessing")
  
-        # Always offer CSV
-        csv_out = display_df.to_csv(index=False)
+    with st.expander("View raw text"):
+        st.text_area("Raw", combined_text[:1000] + ("..." if len(combined_text) > 1000 else ""), height=150)
+ 
+    with st.expander("View before vs after cleaning"):
+        st.dataframe(pd.DataFrame({
+            "Original Sentence": sentences[:len(cleaned_sentences)],
+            "Cleaned Sentence":  cleaned_sentences
+        }), use_container_width=True)
+ 
+    st.success(f"{len(sentences)} sentences extracted and preprocessed")
+ 
+    # Classification Results 
+    st.write("---")
+    st.write("## Classification Results")
+ 
+    total            = len(results_df)
+    security_count   = len(results_df[results_df["Phase I (Type)"] == "Security"])
+    functional_count = total - security_count
+ 
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Total Sentences",         total)
+    c2.metric("Security Requirements",   security_count)
+    c3.metric("Functional Requirements", functional_count)
+ 
+    # ── Charts ────────────────────────────────────────────────────────
+    st.write("### Visual Analytics")
+    col1, col2 = st.columns(2)
+ 
+    with col1:
+        fig1, ax1 = plt.subplots()
+        ax1.bar(["Security","Functional"], [security_count, functional_count],
+                color=["#d62728","#1f77b4"])
+        ax1.set_title("Phase I: Security vs Functional")
+        ax1.set_ylabel("Count")
+        st.pyplot(fig1)
+ 
+    with col2:
+        cia_df = results_df[results_df["Phase II (CIA)"] != "N/A"]
+        if not cia_df.empty:
+            cia_counts = cia_df["Phase II (CIA)"].value_counts()
+            fig2, ax2 = plt.subplots()
+            ax2.pie(cia_counts.values, labels=cia_counts.index, autopct="%1.1f%%",
+                    colors=["#2ca02c","#ff7f0e","#9467bd"])
+            ax2.set_title("Phase II: CIA Triad Breakdown")
+            st.pyplot(fig2)
+        else:
+            st.info("No security requirements found for CIA breakdown.")
+ 
+    # ── Full results table ────────────────────────────────────────────
+    st.write("### Full Classification Table")
+    display_df = results_df.copy()
+    display_df["Phase I Confidence"]  = display_df["Phase I Confidence"].apply(lambda x: f"{x:.0%}")
+    display_df["Phase II Confidence"] = display_df["Phase II Confidence"].apply(
+        lambda x: f"{x:.0%}" if pd.notna(x) else "N/A")
+ 
+    display_df["Type Label"] = display_df["Phase I (Type)"].map(
+        {"Security": "SE", "Functional": "F"}
+    )
+    display_df["CIA Label"] = display_df["Phase II (CIA)"].map(
+        {"Confidentiality": "C", "Integrity": "I", "Availability": "A"}
+    ).fillna("-")
+ 
+    display_df = display_df[[
+        "Sentence",
+        "Type Label", "Phase I (Type)", "Phase I Confidence",
+        "CIA Label",  "Phase II (CIA)", "Phase II Confidence"
+    ]]
+    st.dataframe(display_df, use_container_width=True)
+ 
+    # ── Format-aware download ─────────────────────────────────────────
+    st.write("#### Download Results")
+ 
+    csv_out = display_df.to_csv(index=False)
+    st.download_button(
+        "Download as CSV",
+        csv_out, "classification_results.csv", "text/csv"
+    )
+ 
+    if not input_was_csv:
+        txt_lines = ["CLASSIFICATION RESULTS", "=" * 65,
+                     f"{'#':<4} {'Label':<6} {'CIA':<5} Requirement",
+                     "-" * 65]
+        for idx, row in display_df.reset_index().iterrows():
+            cia = row["CIA Label"] if row["CIA Label"] != "-" else "  -"
+            txt_lines.append(
+                f"{idx+1:<4} {row['Type Label']:<6} {cia:<5} {row['Sentence']}"
+            )
+        txt_out = "\n".join(txt_lines)
         st.download_button(
-            "⬇️ Download as CSV",
-            csv_out, "classification_results.csv", "text/csv"
+            "Download as TXT",
+            txt_out, "classification_results.txt", "text/plain"
         )
  
-        # Offer TXT if input was txt or text area
-        if not input_was_csv:
-            txt_lines = ["CLASSIFICATION RESULTS", "=" * 65,
-                         f"{'#':<4} {'Label':<6} {'CIA':<5} Requirement",
-                         "-" * 65]
-            for idx, row in display_df.reset_index().iterrows():
-                cia = row["CIA Label"] if row["CIA Label"] != "-" else "  -"
-                txt_lines.append(
-                    f"{idx+1:<4} {row['Type Label']:<6} {cia:<5} {row['Sentence']}"
-                )
-            txt_out = "\n".join(txt_lines)
-            st.download_button(
-                "⬇️ Download as TXT",
-                txt_out, "classification_results.txt", "text/plain"
-            )
+    # ── Summary Report ────────────────────────────────────────────────
+    st.write("---")
+    st.write("## Summary Report")
  
-        # ── Summary Report ────────────────────────────────────────────────
-        st.write("---")
-        st.write("## Summary Report")
+    cia_breakdown = ""
+    if not cia_df.empty:
+        for cat, cnt in cia_df["Phase II (CIA)"].value_counts().items():
+            cia_breakdown += f"  - {cat}: {cnt}\n"
+    else:
+        cia_breakdown = "  None detected\n"
  
-        cia_breakdown = ""
-        if not cia_df.empty:
-            for cat, cnt in cia_df["Phase II (CIA)"].value_counts().items():
-                cia_breakdown += f"  - {cat}: {cnt}\n"
-        else:
-            cia_breakdown = "  None detected\n"
- 
-        report = f"""AI-ASSISTED SECURITY REQUIREMENTS ANALYSIS REPORT
+    report = f"""AI-ASSISTED SECURITY REQUIREMENTS ANALYSIS REPORT
 {"="*50}
 Total Sentences Analysed : {total}
 Security Requirements    : {security_count}
@@ -724,8 +729,20 @@ CIA TRIAD BREAKDOWN:
 {cia_breakdown}
 {"="*50}"""
  
-        st.text_area("Report Preview", report, height=220)
-        st.download_button("Download Report (.txt)", report, "summary_report.txt", "text/plain")
+    st.text_area("Report Preview", report, height=220)
+    st.download_button("Download Report (.txt)", report, "summary_report.txt", "text/plain")
+
+#Clear results button----------------------------------------------------------
+
+if "results_df" in st.session_state:
+    st.write("---")
+    st.write("### Start a New Classification")
+    st.caption("Click below to clear the current results and classify a new set of requirements.")
+    if st.button("Clear Results", type="secondary", use_container_width=True):
+        for key in ["results_df", "sentences", "cleaned_sentences", "combined_text", "input_was_csv"]:
+            if key in st.session_state:
+                del st.session_state[key]
+        st.rerun()
  
 # Footer------------------------------------------------------------------------
 
