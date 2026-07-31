@@ -1,3 +1,6 @@
+import os
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -5,9 +8,7 @@ import nltk
 import re
 import matplotlib.pyplot as plt
 from transformers import pipeline
-#from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 import random
-#from collections import Counter
 
 # download NLTK data
 nltk.download('punkt')
