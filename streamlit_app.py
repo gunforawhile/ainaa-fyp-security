@@ -922,50 +922,50 @@ CIA TRIAD BREAKDOWN:
     #Add to report function 
     
     st.write("---")
-            if st.button("Add Recommendations to Report", type="primary"):
-                st.session_state["recs"] = recs
-                st.success("Recommendations added. See the table below.")
-     
-            if "recs" in st.session_state and st.session_state["recs"]:
-                st.write("### Recommendations Table")
-                rec_df = pd.DataFrame([{
-                    "Req #":             r["req_number"],
-                    "Original Requirement": r["requirement"],
-                    "CIA Category":      r["cia"],
-                    "Concept":           r["concept"],
-                    "Issue":             r["issue"],
-                    "Recommended Improvement": r["suggestion"],
-                    "Reason":            "The revised requirement is more specific, measurable, and testable."
-                } for r in st.session_state["recs"]])
-     
-                st.dataframe(rec_df, use_container_width=True)
-     
-                rec_csv = rec_df.to_csv(index=False)
-                st.download_button(
-                    "Download Recommendations as CSV",
-                    rec_csv,
-                    "security_recommendations.csv",
-                    "text/csv"
-                )
-     
-                rec_txt_lines = ["SECURITY REQUIREMENTS RECOMMENDATIONS", "=" * 65]
-                for r in st.session_state["recs"]:
-                    rec_txt_lines += [
-                        f"\nRequirement #{r['req_number']} [{r['cia']}]",
-                        f"Original  : {r['requirement']}",
-                        f"Concept   : {r['concept']}",
-                        f"Issue     : This requirement {r['issue']}.",
-                        f"Suggested : {r['suggestion']}",
-                        f"Reason    : The revised requirement is more specific, measurable, and testable.",
-                        "-" * 65
-                    ]
-                rec_txt = "\n".join(rec_txt_lines)
-                st.download_button(
-                    "Download Recommendations as TXT",
-                    rec_txt,
-                    "security_recommendations.txt",
-                    "text/plain"
-                )
+    if st.button("Add Recommendations to Report", type="primary"):
+        st.session_state["recs"] = recs
+        st.success("Recommendations added. See the table below.")
+
+    if "recs" in st.session_state and st.session_state["recs"]:
+        st.write("### Recommendations Table")
+        rec_df = pd.DataFrame([{
+            "Req #":             r["req_number"],
+            "Original Requirement": r["requirement"],
+            "CIA Category":      r["cia"],
+            "Concept":           r["concept"],
+            "Issue":             r["issue"],
+            "Recommended Improvement": r["suggestion"],
+            "Reason":            "The revised requirement is more specific, measurable, and testable."
+        } for r in st.session_state["recs"]])
+
+        st.dataframe(rec_df, use_container_width=True)
+
+        rec_csv = rec_df.to_csv(index=False)
+        st.download_button(
+            "Download Recommendations as CSV",
+            rec_csv,
+            "security_recommendations.csv",
+            "text/csv"
+        )
+
+        rec_txt_lines = ["SECURITY REQUIREMENTS RECOMMENDATIONS", "=" * 65]
+        for r in st.session_state["recs"]:
+            rec_txt_lines += [
+                f"\nRequirement #{r['req_number']} [{r['cia']}]",
+                f"Original  : {r['requirement']}",
+                f"Concept   : {r['concept']}",
+                f"Issue     : This requirement {r['issue']}.",
+                f"Suggested : {r['suggestion']}",
+                f"Reason    : The revised requirement is more specific, measurable, and testable.",
+                "-" * 65
+            ]
+        rec_txt = "\n".join(rec_txt_lines)
+        st.download_button(
+            "Download Recommendations as TXT",
+            rec_txt,
+            "security_recommendations.txt",
+            "text/plain"
+        )
             
 #Clear results button------------------------------------------------------------
 
