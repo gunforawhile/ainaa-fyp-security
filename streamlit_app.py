@@ -603,7 +603,7 @@ if start:
             uf.name.lower().endswith(".csv") for uf in uploaded_files
         ) if uploaded_files else False
 
-if "results_df" in st.session_state:
+if "results_df" in st.session_state: 
     
     results_df      = st.session_state["results_df"]
     sentences       = st.session_state["sentences"]
@@ -901,24 +901,24 @@ CIA TRIAD BREAKDOWN:
     
     recs = generate_recommendations(results_df)
      
-        if not recs:
-            st.success("All security requirements appear specific and complete. No improvements suggested.")
-        else:
-            st.info(f"**{len(recs)} improvement suggestion(s) found** across {len(set(r['req_number'] for r in recs))} security requirement(s).")
-     
-            for i, rec in enumerate(recs, 1):
-                with st.expander(f"Suggestion {i} — Requirement #{rec['req_number']} [{rec['cia']}]"):
-                    st.write(f"**Original Requirement:**")
-                    st.info(rec["requirement"])
-                    st.write(f"**CIA Category:** `{rec['cia']}`")
-                    st.write(f"**Security Concept:** `{rec['concept']}`")
-                    st.write(f"**Issue Detected:**")
-                    st.warning(f"This requirement {rec['issue']}.")
-                    st.write(f"**Recommended Improvement:**")
-                    st.success(rec["suggestion"])
-                    st.write(f"**Reason:**")
-                    st.caption("The revised requirement is more specific, measurable, and testable — making it easier for developers to implement and for testers to verify.")
-    
+    if not recs:
+        st.success("All security requirements appear specific and complete. No improvements suggested.")
+    else:
+        st.info(f"**{len(recs)} improvement suggestion(s) found** across {len(set(r['req_number'] for r in recs))} security requirement(s).")
+ 
+        for i, rec in enumerate(recs, 1):
+            with st.expander(f"Suggestion {i} — Requirement #{rec['req_number']} [{rec['cia']}]"):
+                st.write(f"**Original Requirement:**")
+                st.info(rec["requirement"])
+                st.write(f"**CIA Category:** `{rec['cia']}`")
+                st.write(f"**Security Concept:** `{rec['concept']}`")
+                st.write(f"**Issue Detected:**")
+                st.warning(f"This requirement {rec['issue']}.")
+                st.write(f"**Recommended Improvement:**")
+                st.success(rec["suggestion"])
+                st.write(f"**Reason:**")
+                st.caption("The revised requirement is more specific, measurable, and testable — making it easier for developers to implement and for testers to verify.")
+
     #Add to report function 
     
     st.write("---")
