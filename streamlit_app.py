@@ -639,7 +639,7 @@ if "results_df" in st.session_state:
     c2.metric("Security Requirements",   security_count)
     c3.metric("Functional Requirements", functional_count)
  
-    # ── Charts ────────────────────────────────────────────────────────
+    # Charts 
     st.write("### Visual Analytics")
     col1, col2 = st.columns(2)
  
@@ -663,7 +663,7 @@ if "results_df" in st.session_state:
         else:
             st.info("No security requirements found for CIA breakdown.")
  
-    # ── Full results table ────────────────────────────────────────────
+    # Full results table 
     st.write("### Full Classification Table")
     display_df = results_df.copy()
     display_df["Phase I Confidence"]  = display_df["Phase I Confidence"].apply(lambda x: f"{x:.0%}")
@@ -684,7 +684,7 @@ if "results_df" in st.session_state:
     ]]
     st.dataframe(display_df, use_container_width=True)
  
-    # ── Format-aware download ─────────────────────────────────────────
+    # Format-aware download 
     st.write("#### Download Results")
  
     csv_out = display_df.to_csv(index=False)
@@ -708,7 +708,7 @@ if "results_df" in st.session_state:
             txt_out, "classification_results.txt", "text/plain"
         )
  
-    # ── Summary Report ────────────────────────────────────────────────
+    # Summary Report 
     st.write("---")
     st.write("## Summary Report")
  
@@ -732,14 +732,249 @@ CIA TRIAD BREAKDOWN:
     st.text_area("Report Preview", report, height=220)
     st.download_button("Download Report (.txt)", report, "summary_report.txt", "text/plain")
 
-#Clear results button----------------------------------------------------------
+# AI Reommendation System------------------------------------------------------------
+
+st.write("## Security Requirements Recommendation System")
+st.caption("Analyses each security requirements for vagueness and suggests improvements based on CIA Triad best practices.")
+
+#Vagueness rules
+VAGUENESS_RULES = {
+        "Confidentiality": [
+            {
+                "concept":    "authentication",
+                "keywords":   ["access","login","unauthori","authenti","authoris","authoriz","user","identity"],
+                "missing_if": ["password","mfa","multi-factor","two-factor","biometric","token","otp",
+                               "certificate","sso","single sign","oauth","saml","ldap","authenticate"],
+                "issue":      "does not specify how users are authenticated",
+                "suggestion": "The system shall authenticate users using [method e.g. password, MFA, token] before granting access to [specific resource]."
+            },
+            {
+                "concept":    "authorisation",
+                "keywords":   ["access","restrict","only","authoris","authoriz","permission","privilege","role"],
+                "missing_if": ["role","rbac","role-based","permission","privilege","policy","acl","group",
+                               "admin","manager","level","tier"],
+                "issue":      "does not specify how authorisation is enforced or which roles are permitted",
+                "suggestion": "The system shall enforce role-based access control, granting access to [resource] only to users with the [role] role."
+            },
+            {
+                "concept":    "encryption",
+                "keywords":   ["encrypt","protect","secure","confidential","sensitive","private","personal"],
+                "missing_if": ["aes","rsa","tls","ssl","https","256","128","end-to-end","e2e","at rest",
+                               "in transit","in-transit","algorithm","cipher"],
+                "issue":      "does not specify the encryption standard or method used",
+                "suggestion": "The system shall encrypt [data type] using AES-256 at rest and TLS 1.2 or higher in transit."
+            },
+            {
+                "concept":    "data privacy",
+                "keywords":   ["privacy","personal","pii","gdpr","data","information","customer","patient"],
+                "missing_if": ["gdpr","pdpa","hipaa","consent","anonymi","pseudonym","retention","delete",
+                               "purge","minimum","purpose","lawful"],
+                "issue":      "does not reference a specific privacy standard, regulation, or data handling policy",
+                "suggestion": "The system shall handle personal data in compliance with [regulation e.g. GDPR/PDPA], ensuring data is collected only for specified purposes and retained no longer than necessary."
+            },
+        ],
+        "Integrity": [
+            {
+                "concept":    "input validation",
+                "keywords":   ["input","data","enter","submit","upload","form","field","inject","valid","sanitise","sanitize"],
+                "missing_if": ["whitelist","blacklist","regex","format","type","length","range","sanitise",
+                               "sanitize","escape","parameteris","parameteriz","bound"],
+                "issue":      "does not specify how input is validated or what validation rules are applied",
+                "suggestion": "The system shall validate all user input by enforcing [type/length/format] constraints and rejecting input that does not conform to the defined whitelist."
+            },
+            {
+                "concept":    "audit logging",
+                "keywords":   ["log","audit","track","record","monitor","change","modif","transaction","histor"],
+                "missing_if": ["who","user id","timestamp","time","what","before","after","retain","store",
+                               "tamper","immut","read-only","review"],
+                "issue":      "does not specify what information is logged, how long logs are retained, or how they are protected",
+                "suggestion": "The system shall maintain an immutable audit log recording who performed the action, what was changed, and when, retaining logs for a minimum of [duration]."
+            },
+            {
+                "concept":    "data integrity checking",
+                "keywords":   ["integrity","corrupt","checksum","hash","verif","accurate","consistent","tamper"],
+                "missing_if": ["sha","md5","hash","checksum","crc","digest","hmac","sign","certif"],
+                "issue":      "does not specify the integrity verification method or algorithm used",
+                "suggestion": "The system shall verify data integrity using [e.g. SHA-256 checksums / HMAC] before processing or storing data."
+            },
+            {
+                "concept":    "backup and recovery",
+                "keywords":   ["backup","recover","restore","replac","redundan","failsafe","data loss"],
+                "missing_if": ["rpo","rto","frequency","daily","hourly","weekly","offsite","test","verif",
+                               "point-in-time","snapshot"],
+                "issue":      "does not specify backup frequency, recovery time objective (RTO), or recovery point objective (RPO)",
+                "suggestion": "The system shall perform automated backups every [frequency], with an RTO of [X hours] and RPO of [Y hours], and backups shall be tested monthly."
+            },
+        ],
+        "Availability": [
+            {
+                "concept":    "uptime / availability target",
+                "keywords":   ["availab","uptime","downtime","online","service","access","24","continuous"],
+                "missing_if": ["99","percent","%","sla","hours","minute","second","month","year","nines"],
+                "issue":      "does not specify a measurable availability target or SLA",
+                "suggestion": "The system shall maintain a minimum uptime of 99.9% measured monthly, as defined in the Service Level Agreement."
+            },
+            {
+                "concept":    "failover and redundancy",
+                "keywords":   ["failover","redundan","backup server","replica","cluster","disaster","recover","downtime","outage"],
+                "missing_if": ["automatic","seconds","minutes","switch","standby","primary","secondary",
+                               "hot","warm","cold","rto","within"],
+                "issue":      "does not specify the failover mechanism, switchover time, or redundancy configuration",
+                "suggestion": "The system shall automatically switch to a standby server within [X seconds] of a primary server failure, with no data loss."
+            },
+            {
+                "concept":    "denial of service protection",
+                "keywords":   ["dos","ddos","denial","attack","flood","traffic","load","overload","abuse"],
+                "missing_if": ["rate limit","throttle","block","firewall","waf","filter","detect","mitigat",
+                               "cdn","cloudflare","threshold"],
+                "issue":      "does not specify the mitigation mechanism or thresholds for detecting and blocking attacks",
+                "suggestion": "The system shall implement rate limiting and traffic filtering to detect and mitigate denial-of-service attacks, blocking sources exceeding [X] requests per second."
+            },
+            {
+                "concept":    "maintenance and patching",
+                "keywords":   ["update","patch","virus","antivirus","malware","software","security update","vulnerab"],
+                "missing_if": ["schedule","automatic","within","hours","days","window","notify","test",
+                               "approval","rollback"],
+                "issue":      "does not specify how updates are applied, tested, or scheduled to minimise service disruption",
+                "suggestion": "The system shall apply security patches within [X days] of release, with updates tested in a staging environment before deployment and executed during scheduled maintenance windows."
+            },
+        ],
+    }
+
+#Detect vagueness
+
+def detect_vagueness(requirement, cia_category):
+        """
+        Checks a requirement against vagueness rules for its CIA category.
+        Returns a list of issues found — empty list means requirement is specific enough.
+        """
+        req_lower = requirement.lower()
+        issues = []
+ 
+        rules = VAGUENESS_RULES.get(cia_category, [])
+        for rule in rules:
+            # Check if this rule is relevant — does the requirement mention this concept?
+            concept_mentioned = any(kw in req_lower for kw in rule["keywords"])
+            if not concept_mentioned:
+                continue
+            # If concept is mentioned, check if it's already specific enough
+            already_specific = any(spec in req_lower for spec in rule["missing_if"])
+            if not already_specific:
+                issues.append({
+                    "concept":    rule["concept"],
+                    "issue":      rule["issue"],
+                    "suggestion": rule["suggestion"],
+                })
+        return issues
+
+#Generate Recommendations
+
+def generate_recommendations(results_df):
+        """
+        Iterates through all Security requirements, runs vagueness detection,
+        and returns a list of recommendation dicts for vague ones only.
+        """
+        recommendations = []
+        sec_rows = results_df[results_df["Phase I (Type)"] == "Security"].reset_index()
+ 
+        for _, row in sec_rows.iterrows():
+            req   = row["Sentence"]
+            cia   = row["Phase II (CIA)"]
+            idx   = row["index"] + 1   # original row number
+ 
+            if cia == "N/A":
+                continue
+ 
+            issues = detect_vagueness(req, cia)
+            for issue in issues:
+                recommendations.append({
+                    "req_number":  idx,
+                    "requirement": req,
+                    "cia":         cia,
+                    "concept":     issue["concept"],
+                    "issue":       issue["issue"],
+                    "suggestion":  issue["suggestion"],
+                })
+        return recommendations
+
+#Display recs
+
+recs = generate_recommendations(results_df)
+ 
+    if not recs:
+        st.success("All security requirements appear specific and complete. No improvements suggested.")
+    else:
+        st.info(f"**{len(recs)} improvement suggestion(s) found** across {len(set(r['req_number'] for r in recs))} security requirement(s).")
+ 
+        for i, rec in enumerate(recs, 1):
+            with st.expander(f"Suggestion {i} — Requirement #{rec['req_number']} [{rec['cia']}]"):
+                st.write(f"**Original Requirement:**")
+                st.info(rec["requirement"])
+                st.write(f"**CIA Category:** `{rec['cia']}`")
+                st.write(f"**Security Concept:** `{rec['concept']}`")
+                st.write(f"**Issue Detected:**")
+                st.warning(f"This requirement {rec['issue']}.")
+                st.write(f"**Recommended Improvement:**")
+                st.success(rec["suggestion"])
+                st.write(f"**Reason:**")
+                st.caption("The revised requirement is more specific, measurable, and testable — making it easier for developers to implement and for testers to verify.")
+
+#Add to report function 
+
+st.write("---")
+        if st.button("Add Recommendations to Report", type="primary"):
+            st.session_state["recs"] = recs
+            st.success("Recommendations added. See the table below.")
+ 
+        if "recs" in st.session_state and st.session_state["recs"]:
+            st.write("### Recommendations Table")
+            rec_df = pd.DataFrame([{
+                "Req #":             r["req_number"],
+                "Original Requirement": r["requirement"],
+                "CIA Category":      r["cia"],
+                "Concept":           r["concept"],
+                "Issue":             r["issue"],
+                "Recommended Improvement": r["suggestion"],
+                "Reason":            "The revised requirement is more specific, measurable, and testable."
+            } for r in st.session_state["recs"]])
+ 
+            st.dataframe(rec_df, use_container_width=True)
+ 
+            rec_csv = rec_df.to_csv(index=False)
+            st.download_button(
+                "Download Recommendations as CSV",
+                rec_csv,
+                "security_recommendations.csv",
+                "text/csv"
+            )
+ 
+            rec_txt_lines = ["SECURITY REQUIREMENTS RECOMMENDATIONS", "=" * 65]
+            for r in st.session_state["recs"]:
+                rec_txt_lines += [
+                    f"\nRequirement #{r['req_number']} [{r['cia']}]",
+                    f"Original  : {r['requirement']}",
+                    f"Concept   : {r['concept']}",
+                    f"Issue     : This requirement {r['issue']}.",
+                    f"Suggested : {r['suggestion']}",
+                    f"Reason    : The revised requirement is more specific, measurable, and testable.",
+                    "-" * 65
+                ]
+            rec_txt = "\n".join(rec_txt_lines)
+            st.download_button(
+                "Download Recommendations as TXT",
+                rec_txt,
+                "security_recommendations.txt",
+                "text/plain"
+            )
+            
+#Clear results button------------------------------------------------------------
 
 if "results_df" in st.session_state:
     st.write("---")
     st.write("### Start a New Classification?")
     st.caption("Clear current results and classify a new set of requirements.")
     if st.button("Clear Results", type="primary", use_container_width=True):
-        for key in ["results_df", "sentences", "cleaned_sentences", "combined_text", "input_was_csv"]:
+        for key in ["results_df", "sentences", "cleaned_sentences", "combined_text", "input_was_csv", "recs"]:
             if key in st.session_state:
                 del st.session_state[key]
         st.rerun()
