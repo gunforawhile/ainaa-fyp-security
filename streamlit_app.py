@@ -737,314 +737,1632 @@ CIA TRIAD BREAKDOWN:
     st.write("## Security Requirements Recommendation System")
     st.caption("Analyses each security requirements for vagueness and suggests improvements based on CIA Triad best practices.")
     
-    def extract_subject(requirement):
-        """
-        Extracts the core subject from a requirement sentence.
-        e.g. 'The system shall provide access to patient records'
-             → 'patient records'
-        """
-        req = requirement.strip().rstrip(".")
-        # Try to find what comes after common SRS verbs
-        patterns = [
-            r"shall (?:provide|allow|give|grant|enable|support|ensure|restrict|protect|prevent|maintain|store|manage|display|generate|send|create|delete|update|modify|access|record|log|encrypt|authenticate|authorise|authorize)\s+(.*)",
-            r"must (?:provide|allow|give|grant|enable|support|ensure|restrict|protect|prevent|maintain|store|manage|display|generate|send|create|delete|update|modify|access|record|log|encrypt|authenticate|authorise|authorize)\s+(.*)",
-            r"will (?:provide|allow|give|grant|enable|support|ensure|restrict|protect|prevent|maintain|store|manage|display|generate|send|create|delete|update|modify|access|record|log|encrypt|authenticate|authorise|authorize)\s+(.*)",
-        ]
-        for pattern in patterns:
-            m = re.search(pattern, req, re.IGNORECASE)
-            if m:
-                # Take first clause only (before semicolon or comma)
-                subject = m.group(1).split(";")[0].split(",")[0].strip()
-                # Trim to reasonable length
-                words = subject.split()
-                return " ".join(words[:10]) if len(words) > 10 else subject
-        return "the specified resource"
- 
-    def build_suggestion(requirement, cia_category, concept):
-        """
-        Builds a contextual suggestion by taking the original requirement
-        and appending what is missing — rather than replacing the whole sentence.
-        """
-        req   = requirement.strip().rstrip(".")
-        subj  = extract_subject(requirement)
- 
-        templates = {
-            # Confidentiality
-            ("Confidentiality", "authentication"): (
-                f"{req}, and the system shall verify user identity through "
-                f"[e.g. password, MFA, or token-based authentication] before granting access."
+    SECURITY_IMPROVEMENT_RULES = {
+
+    # ========================================================
+    # CONFIDENTIALITY
+    # ========================================================
+
+    "Confidentiality": [
+
+        {
+            "concept": "password storage",
+
+            "strong_triggers": [
+                "store password",
+                "stored password",
+                "password storage",
+                "protect password",
+                "secure password",
+                "password database",
+                "credential storage"
+            ],
+
+            "trigger_groups": [
+                ["password", "store"],
+                ["password", "database"],
+                ["password", "protect"],
+                ["credential", "store"]
+            ],
+
+            "exclude_if": [],
+
+            "required_groups": {
+                "password-protection method": [
+                    "password hashing",
+                    "password-hashing",
+                    "hashed password",
+                    "hash passwords",
+                    "salted hash",
+                    "salt",
+                    "argon2",
+                    "bcrypt",
+                    "scrypt",
+                    "pbkdf2"
+                ],
+
+                "plaintext-storage restriction": [
+                    "not store in plaintext",
+                    "not stored in plaintext",
+                    "shall not store plaintext",
+                    "never store plaintext",
+                    "not use reversible encryption",
+                    "not stored using reversible encryption"
+                ]
+            },
+
+            "minimum_missing": 1,
+            "priority": 10,
+
+            "issue": (
+                "does not fully specify how stored passwords are protected"
             ),
-            ("Confidentiality", "authorisation"): (
-                f"{req}, and access shall be restricted based on the user's assigned role, "
-                f"ensuring only authorised roles can perform this action."
+
+            "suggestion": (
+                "The system shall store passwords using an "
+                "organisation-approved salted password-hashing mechanism "
+                "and shall not store passwords in plaintext or using "
+                "reversible encryption."
+            )
+        },
+
+        {
+            "concept": "authentication",
+
+            "strong_triggers": [
+                "authenticate",
+                "authentication",
+                "login",
+                "log in",
+                "sign in",
+                "verify identity",
+                "identity verification",
+                "credential verification"
+            ],
+
+            "trigger_groups": [
+                ["grant access", "identity"],
+                ["access system", "credential"],
+                ["access account", "credential"],
+                ["access application", "credential"]
+            ],
+
+            "exclude_if": [
+                "display login page",
+                "login page layout",
+                "navigate to login",
+                "login screen colour",
+                "login screen color"
+            ],
+
+            "required_groups": {
+                "authentication method": [
+                    "password",
+                    "passkey",
+                    "mfa",
+                    "multi-factor",
+                    "multifactor",
+                    "two-factor",
+                    "2fa",
+                    "biometric",
+                    "token",
+                    "one-time password",
+                    "otp",
+                    "digital certificate",
+                    "single sign-on",
+                    "single sign on",
+                    "sso",
+                    "oauth",
+                    "saml",
+                    "ldap"
+                ],
+
+                "protected resource or operation": [
+                    "account",
+                    "application",
+                    "system",
+                    "database",
+                    "portal",
+                    "service",
+                    "administrative function",
+                    "protected resource",
+                    "restricted function",
+                    "sensitive operation"
+                ]
+            },
+
+            "minimum_missing": 1,
+            "priority": 9,
+
+            "issue": (
+                "does not fully specify the authentication method or "
+                "the protected resource"
             ),
-            ("Confidentiality", "encryption"): (
-                f"{req}, and all data shall be encrypted using AES-256 at rest "
-                f"and TLS 1.2 or higher during transmission."
+
+            "suggestion": (
+                "The system shall authenticate [specified user or actor] "
+                "using [organisation-approved authentication method] "
+                "before granting access to [specified protected resource "
+                "or operation]."
+            )
+        },
+
+        {
+            "concept": "authorisation",
+
+            "strong_triggers": [
+                "authorise",
+                "authorize",
+                "authorisation",
+                "authorization",
+                "access control",
+                "access rights",
+                "access permission",
+                "restricted access",
+                "privileged access",
+                "only authorised",
+                "only authorized",
+                "unauthorised access",
+                "unauthorized access",
+                "role-based access",
+                "role based access",
+                "rbac"
+            ],
+
+            "trigger_groups": [
+                ["only", "access"],
+                ["restrict", "access"],
+                ["permission", "resource"],
+                ["privilege", "function"],
+                ["role", "access"]
+            ],
+
+            "exclude_if": [
+                "wheelchair access",
+                "physical access road",
+                "accessibility requirement",
+                "access the public page",
+                "access the help page"
+            ],
+
+            "required_groups": {
+                "authorised actor or role": [
+                    "administrator",
+                    "admin",
+                    "manager",
+                    "supervisor",
+                    "operator",
+                    "employee",
+                    "customer",
+                    "owner",
+                    "authorised user",
+                    "authorized user",
+                    "assigned role",
+                    "specified role",
+                    "rbac",
+                    "role-based",
+                    "role based"
+                ],
+
+                "protected resource or operation": [
+                    "record",
+                    "account",
+                    "file",
+                    "database",
+                    "function",
+                    "operation",
+                    "resource",
+                    "report",
+                    "configuration",
+                    "personal information",
+                    "customer data",
+                    "patient data",
+                    "administrative function"
+                ],
+
+                "access-control basis": [
+                    "role-based",
+                    "role based",
+                    "rbac",
+                    "permission",
+                    "access policy",
+                    "acl",
+                    "least privilege",
+                    "assigned role",
+                    "authorisation policy",
+                    "authorization policy"
+                ]
+            },
+
+            "minimum_missing": 1,
+            "priority": 9,
+
+            "issue": (
+                "does not fully identify the authorised role, protected "
+                "resource, or access-control basis"
             ),
-            ("Confidentiality", "data privacy"): (
-                f"{req}, in compliance with applicable data privacy regulations "
-                f"[e.g. GDPR/PDPA/HIPAA], ensuring data is collected only for "
-                f"stated purposes and retained no longer than necessary."
+
+            "suggestion": (
+                "The system shall enforce [approved access-control policy] "
+                "and permit [specified operation] on [specified resource] "
+                "only to users assigned the [authorised role or permission]."
+            )
+        },
+
+        {
+            "concept": "encryption",
+
+            "strong_triggers": [
+                "encrypt",
+                "encrypted",
+                "encryption",
+                "cryptographic protection",
+                "protect sensitive data",
+                "protect confidential data",
+                "secure personal data",
+                "secure customer data",
+                "secure patient data"
+            ],
+
+            "trigger_groups": [
+                ["sensitive data", "protect"],
+                ["personal data", "protect"],
+                ["confidential information", "protect"],
+                ["payment information", "protect"],
+                ["customer information", "protect"]
+            ],
+
+            "exclude_if": [
+                "password hashing",
+                "hash password",
+                "password hash",
+                "display encrypted",
+                "encryption icon"
+            ],
+
+            "required_groups": {
+                "protected data": [
+                    "personal data",
+                    "personal information",
+                    "customer data",
+                    "patient data",
+                    "payment data",
+                    "financial data",
+                    "credential",
+                    "file",
+                    "database",
+                    "record",
+                    "specified data",
+                    "sensitive information"
+                ],
+
+                "protection state": [
+                    "at rest",
+                    "stored data",
+                    "in storage",
+                    "in transit",
+                    "during transmission",
+                    "transmitted data",
+                    "end-to-end"
+                ],
+
+                "approved cryptographic basis": [
+                    "approved encryption",
+                    "approved cryptographic",
+                    "organisation-approved",
+                    "organization-approved",
+                    "cryptographic policy",
+                    "key management",
+                    "encryption key",
+                    "tls",
+                    "https"
+                ]
+            },
+
+            "minimum_missing": 1,
+            "priority": 8,
+
+            "issue": (
+                "does not fully specify which data is protected, when "
+                "encryption applies, or the approved cryptographic basis"
             ),
-            # Integrity
-            ("Integrity", "input validation"): (
-                f"{req}, and all input shall be validated against defined type, "
-                f"length, and format rules before processing, rejecting any non-conforming data."
+
+            "suggestion": (
+                "The system shall encrypt [specified sensitive data] "
+                "[at rest, in transit, or both] using an "
+                "organisation-approved cryptographic mechanism and "
+                "approved key-management procedures."
+            )
+        },
+
+        {
+            "concept": "data privacy",
+
+            "strong_triggers": [
+                "personal data",
+                "personal information",
+                "personally identifiable information",
+                "pii",
+                "privacy",
+                "privacy policy",
+                "patient information",
+                "health information",
+                "data consent",
+                "data retention"
+            ],
+
+            "trigger_groups": [
+                ["customer data", "privacy"],
+                ["patient data", "privacy"],
+                ["personal data", "collect"],
+                ["personal information", "store"]
+            ],
+
+            "exclude_if": [
+                "public information",
+                "non-personal data",
+                "anonymous public data"
+            ],
+
+            "required_groups": {
+                "processing purpose": [
+                    "specified purpose",
+                    "defined purpose",
+                    "stated purpose",
+                    "purpose limitation",
+                    "business purpose",
+                    "lawful purpose"
+                ],
+
+                "access or disclosure restriction": [
+                    "authorised",
+                    "authorized",
+                    "access restriction",
+                    "disclosure restriction",
+                    "only accessible",
+                    "only disclosed",
+                    "consent"
+                ],
+
+                "retention or deletion condition": [
+                    "retention",
+                    "retain",
+                    "delete",
+                    "deletion",
+                    "purge",
+                    "remove",
+                    "no longer necessary",
+                    "retention period"
+                ]
+            },
+
+            "minimum_missing": 2,
+            "priority": 7,
+
+            "issue": (
+                "does not fully define the purpose, access restrictions, "
+                "or retention conditions for personal data"
             ),
-            ("Integrity", "audit logging"): (
-                f"{req}, and the system shall record an audit log entry capturing "
-                f"the user ID, action performed, timestamp, and data changed, "
-                f"retained for a minimum of [X months]."
-            ),
-            ("Integrity", "data integrity checking"): (
-                f"{req}, and data integrity shall be verified using [e.g. SHA-256 "
-                f"checksums or HMAC] before storage and after retrieval."
-            ),
-            ("Integrity", "backup and recovery"): (
-                f"{req}, and automated backups shall be performed every [frequency] "
-                f"with a recovery time objective (RTO) of [X hours] and recovery "
-                f"point objective (RPO) of [Y hours]."
-            ),
-            # Availability
-            ("Availability", "uptime / availability target"): (
-                f"{req}, and the system shall maintain a minimum uptime of 99.9% "
-                f"measured monthly, as defined in the Service Level Agreement."
-            ),
-            ("Availability", "failover and redundancy"): (
-                f"{req}, and the system shall automatically switch to a standby "
-                f"instance within [X seconds] of a primary failure with no data loss."
-            ),
-            ("Availability", "denial of service protection"): (
-                f"{req}, and the system shall implement rate limiting and traffic "
-                f"filtering to detect and block sources exceeding [X] requests per second."
-            ),
-            ("Availability", "maintenance and patching"): (
-                f"{req}, and security patches shall be applied within [X days] of "
-                f"release, tested in a staging environment, and deployed during "
-                f"scheduled maintenance windows."
-            ),
+
+            "suggestion": (
+                "The system shall process [specified personal data] only "
+                "for [defined purpose], restrict access or disclosure to "
+                "[authorised parties], and retain the data for no longer "
+                "than [approved retention period or condition]."
+            )
         }
- 
-        key = (cia_category, concept)
-        return templates.get(key, f"{req}, with additional security controls applied as appropriate.")
- 
-    VAGUENESS_RULES = {
-        "Confidentiality": [
-            {
-                "concept":    "authentication",
-                "keywords":   ["access","login","unauthori","authenti","authoris","authoriz","identity","user","provide","allow","grant","physician","patient","clinical","clinical encounter","modified","modify"],
-                "missing_if": ["password","mfa","multi-factor","two-factor","biometric","token","otp",
-                               "certificate","sso","single sign","oauth","saml","ldap","authenticate",
-                               "login","credential","verif"],
-                "issue":      "does not specify how user identity is verified before access is granted",
+    ],
+
+    # ========================================================
+    # INTEGRITY
+    # ========================================================
+
+    "Integrity": [
+
+        {
+            "concept": "input validation",
+
+            "strong_triggers": [
+                "input validation",
+                "validate input",
+                "validate user input",
+                "validate submitted data",
+                "sanitize input",
+                "sanitise input",
+                "invalid input",
+                "malicious input",
+                "injection prevention"
+            ],
+
+            "trigger_groups": [
+                ["user input", "validate"],
+                ["submitted data", "validate"],
+                ["uploaded data", "validate"],
+                ["form field", "validate"],
+                ["input", "reject"],
+                ["input", "invalid"]
+            ],
+
+            "exclude_if": [
+                "input device",
+                "keyboard input",
+                "audio input",
+                "video input",
+                "input screen layout"
+            ],
+
+            "required_groups": {
+                "validation constraints": [
+                    "data type",
+                    "expected type",
+                    "length",
+                    "minimum length",
+                    "maximum length",
+                    "range",
+                    "format",
+                    "regular expression",
+                    "regex",
+                    "schema",
+                    "allowed value",
+                    "allowlist",
+                    "whitelist"
+                ],
+
+                "invalid-input handling": [
+                    "reject",
+                    "rejected",
+                    "validation error",
+                    "error message",
+                    "not accepted",
+                    "prevent processing",
+                    "do not process"
+                ],
+
+                "validation timing or location": [
+                    "server-side",
+                    "server side",
+                    "before processing",
+                    "before storage",
+                    "before execution",
+                    "on submission"
+                ]
             },
-            {
-                "concept":    "authorisation",
-                "keywords":   ["only","restrict","authoris","authoriz","permission","privilege","role","specific","certain"],
-                "missing_if": ["role","rbac","role-based","permission","privilege","policy","acl","group",
-                               "admin","manager","level","tier","physician","nurse","staff"],
-                "issue":      "does not specify which roles or user groups are permitted to perform this action",
+
+            "minimum_missing": 1,
+            "priority": 10,
+
+            "issue": (
+                "does not fully specify the validation constraints, "
+                "validation timing, or handling of invalid input"
+            ),
+
+            "suggestion": (
+                "The system shall validate [specified input] before "
+                "[processing or storage] by enforcing its expected type, "
+                "length, range, and format, and shall reject values that "
+                "do not satisfy the defined validation rules."
+            )
+        },
+
+        {
+            "concept": "audit logging",
+
+            "strong_triggers": [
+                "audit log",
+                "audit trail",
+                "security log",
+                "transaction log",
+                "log security event",
+                "record security event",
+                "track changes",
+                "change history",
+                "activity history"
+            ],
+
+            "trigger_groups": [
+                ["record", "modification"],
+                ["log", "access"],
+                ["log", "change"],
+                ["track", "transaction"],
+                ["record", "user action"],
+                ["history", "action"]
+            ],
+
+            "exclude_if": [
+                "application debug log",
+                "developer debug log",
+                "logarithm",
+                "wood log"
+            ],
+
+            "required_groups": {
+                "actor identity": [
+                    "user id",
+                    "user identity",
+                    "username",
+                    "account",
+                    "actor",
+                    "authenticated user",
+                    "service identity",
+                    "who performed"
+                ],
+
+                "event time": [
+                    "timestamp",
+                    "date and time",
+                    "event time",
+                    "when"
+                ],
+
+                "event and affected object": [
+                    "action",
+                    "operation",
+                    "event type",
+                    "affected record",
+                    "affected resource",
+                    "before value",
+                    "after value",
+                    "what was changed"
+                ],
+
+                "log protection": [
+                    "immutable",
+                    "tamper-resistant",
+                    "tamper resistant",
+                    "read-only",
+                    "protected from modification",
+                    "protected from deletion",
+                    "access controlled"
+                ],
+
+                "retention condition": [
+                    "retain",
+                    "retention",
+                    "retained for",
+                    "days",
+                    "months",
+                    "years",
+                    "approved duration"
+                ]
             },
-            {
-                "concept":    "encryption",
-                "keywords":   ["encrypt","protect data","secure data","confidential","sensitive","private","personal data"],
-                "missing_if": ["aes","rsa","tls","ssl","https","256","128","end-to-end","e2e",
-                               "at rest","in transit","algorithm","cipher"],
-                "issue":      "does not specify the encryption standard or method to be used",
+
+            "minimum_missing": 2,
+            "priority": 9,
+
+            "issue": (
+                "does not fully define the audit event details, protection, "
+                "or retention conditions"
+            ),
+
+            "suggestion": (
+                "The system shall record the authenticated actor, timestamp, "
+                "action, affected resource, and outcome for [specified "
+                "security-relevant event], protect the audit records against "
+                "unauthorised modification or deletion, and retain them for "
+                "[approved duration]."
+            )
+        },
+
+        {
+            "concept": "data integrity checking",
+
+            "strong_triggers": [
+                "data integrity",
+                "integrity check",
+                "verify integrity",
+                "detect tampering",
+                "tamper detection",
+                "detect corruption",
+                "corruption detection",
+                "message authentication code",
+                "digital signature"
+            ],
+
+            "trigger_groups": [
+                ["verify", "data"],
+                ["verify", "file"],
+                ["checksum", "verify"],
+                ["hash", "verify"],
+                ["tamper", "data"],
+                ["integrity", "record"]
+            ],
+
+            "exclude_if": [
+                "referential integrity",
+                "visual integrity",
+                "structural integrity"
+            ],
+
+            "required_groups": {
+                "protected object": [
+                    "file",
+                    "message",
+                    "record",
+                    "transaction",
+                    "database",
+                    "document",
+                    "software package",
+                    "specified data"
+                ],
+
+                "integrity-control mechanism": [
+                    "hmac",
+                    "message authentication code",
+                    "digital signature",
+                    "signed",
+                    "authenticated hash",
+                    "sha-256",
+                    "sha-384",
+                    "sha-512",
+                    "organisation-approved integrity",
+                    "organization-approved integrity"
+                ],
+
+                "verification timing": [
+                    "before processing",
+                    "before installation",
+                    "before storage",
+                    "before use",
+                    "on receipt",
+                    "during transmission",
+                    "after retrieval"
+                ],
+
+                "failure response": [
+                    "reject",
+                    "quarantine",
+                    "alert",
+                    "notify",
+                    "stop processing",
+                    "integrity failure"
+                ]
             },
-            {
-                "concept":    "data privacy",
-                "keywords":   ["privacy","personal information","pii","patient data","patient record","health","medical"],
-                "missing_if": ["gdpr","pdpa","hipaa","consent","anonymi","pseudonym","retention",
-                               "delete","purge","purpose","lawful","complian"],
-                "issue":      "does not reference a data privacy regulation or policy governing the handling of this data",
+
+            "minimum_missing": 2,
+            "priority": 8,
+
+            "issue": (
+                "does not fully specify the protected object, integrity "
+                "mechanism, verification timing, or failure response"
+            ),
+
+            "suggestion": (
+                "The system shall verify the integrity and authenticity of "
+                "[specified data or object] using an organisation-approved "
+                "integrity-control mechanism before [specified processing "
+                "stage], and shall [reject, quarantine, or alert] when "
+                "verification fails."
+            )
+        }
+    ],
+
+    # ========================================================
+    # AVAILABILITY
+    # ========================================================
+
+    "Availability": [
+
+        {
+            "concept": "backup and recovery",
+
+            "strong_triggers": [
+                "backup",
+                "data backup",
+                "system backup",
+                "restore data",
+                "data restoration",
+                "disaster recovery",
+                "recovery point objective",
+                "recovery time objective",
+                "rpo",
+                "rto"
+            ],
+
+            "trigger_groups": [
+                ["recover", "data"],
+                ["restore", "database"],
+                ["restore", "system"],
+                ["data loss", "recover"],
+                ["snapshot", "restore"]
+            ],
+
+            "exclude_if": [
+                "backup button colour",
+                "backup button color",
+                "backup icon",
+                "backup copy displayed"
+            ],
+
+            "required_groups": {
+                "protected data or service": [
+                    "database",
+                    "customer data",
+                    "transaction data",
+                    "configuration",
+                    "system state",
+                    "critical data",
+                    "critical service",
+                    "specified data"
+                ],
+
+                "backup schedule": [
+                    "hourly",
+                    "daily",
+                    "weekly",
+                    "monthly",
+                    "frequency",
+                    "every",
+                    "scheduled backup",
+                    "continuous backup"
+                ],
+
+                "recovery objective": [
+                    "rto",
+                    "recovery time objective",
+                    "restore within",
+                    "rpo",
+                    "recovery point objective",
+                    "maximum data loss"
+                ],
+
+                "restoration verification": [
+                    "restore test",
+                    "restoration test",
+                    "recovery test",
+                    "tested backup",
+                    "verify backup",
+                    "backup verification"
+                ]
             },
-        ],
-        "Integrity": [
-            {
-                "concept":    "input validation",
-                "keywords":   ["input","data entry","enter","submit","upload","form","field","inject","valid","sanitise","sanitize","modif"],
-                "missing_if": ["whitelist","blacklist","regex","format","type","length","range","sanitise",
-                               "sanitize","escape","parameteris","parameteriz","bound","constrain"],
-                "issue":      "does not specify how input data is validated or what constraints are enforced",
+
+            "minimum_missing": 2,
+            "priority": 10,
+
+            "issue": (
+                "does not fully define what is backed up, the backup "
+                "schedule, recovery objectives, or restoration testing"
+            ),
+
+            "suggestion": (
+                "The system shall back up [specified critical data or "
+                "configuration] every [approved frequency], support recovery "
+                "within an RTO of [value] and an RPO of [value], and verify "
+                "restoration through [approved testing schedule]."
+            )
+        },
+
+        {
+            "concept": "uptime / availability target",
+
+            "strong_triggers": [
+                "system availability",
+                "service availability",
+                "system uptime",
+                "service uptime",
+                "maximum downtime",
+                "available 24/7",
+                "available 24x7",
+                "continuously available",
+                "high availability",
+                "service interruption"
+            ],
+
+            "trigger_groups": [
+                ["available", "business hours"],
+                ["available", "all times"],
+                ["available", "year"],
+                ["available", "day"],
+                ["downtime", "system"],
+                ["uptime", "system"]
+            ],
+
+            "exclude_if": [
+                "available product",
+                "available option",
+                "available room",
+                "available record",
+                "available item",
+                "available appointment",
+                "available user"
+            ],
+
+            "required_groups": {
+                "measurable target": [
+                    "%",
+                    "percent",
+                    "uptime target",
+                    "availability target",
+                    "maximum downtime",
+                    "service level"
+                ],
+
+                "measurement period": [
+                    "per month",
+                    "monthly",
+                    "per year",
+                    "annually",
+                    "per quarter",
+                    "quarterly",
+                    "business hours",
+                    "calendar month",
+                    "measurement period"
+                ],
+
+                "scope or exclusions": [
+                    "excluding scheduled maintenance",
+                    "scheduled maintenance",
+                    "planned maintenance",
+                    "specified service",
+                    "critical service",
+                    "service level agreement",
+                    "sla"
+                ]
             },
-            {
-                "concept":    "audit logging",
-                "keywords":   ["log","audit","track","record","monitor","change","modif","transaction","histor","concurrent"],
-                "missing_if": ["who","user id","timestamp","time","what","before","after","retain",
-                               "tamper","immut","read-only","review","duration"],
-                "issue":      "does not specify what is logged, how long logs are retained, or how they are protected from tampering",
+
+            "minimum_missing": 1,
+            "priority": 9,
+
+            "issue": (
+                "does not fully define a measurable availability target, "
+                "measurement period, or applicable service scope"
+            ),
+
+            "suggestion": (
+                "The system shall maintain an availability of "
+                "[stakeholder-approved percentage] for [specified service] "
+                "during [defined measurement period], excluding only "
+                "[approved maintenance conditions]."
+            )
+        },
+
+        {
+            "concept": "failover and redundancy",
+
+            "strong_triggers": [
+                "failover",
+                "automatic failover",
+                "standby server",
+                "backup server",
+                "redundant server",
+                "redundancy",
+                "replica server",
+                "secondary server",
+                "cluster failover"
+            ],
+
+            "trigger_groups": [
+                ["server failure", "switch"],
+                ["primary server", "secondary"],
+                ["outage", "standby"],
+                ["failure", "replica"]
+            ],
+
+            "exclude_if": [
+                "backup file",
+                "backup data",
+                "duplicate record"
+            ],
+
+            "required_groups": {
+                "failure condition": [
+                    "server failure",
+                    "service failure",
+                    "node failure",
+                    "network failure",
+                    "primary failure",
+                    "health-check failure",
+                    "specified failure"
+                ],
+
+                "failover destination": [
+                    "standby server",
+                    "secondary server",
+                    "replica",
+                    "backup site",
+                    "alternate site",
+                    "redundant node"
+                ],
+
+                "switchover objective": [
+                    "within",
+                    "seconds",
+                    "minutes",
+                    "rto",
+                    "recovery time",
+                    "switchover time"
+                ],
+
+                "failover behaviour": [
+                    "automatic",
+                    "automatically",
+                    "manual failover",
+                    "traffic redirected",
+                    "switch over",
+                    "switchover"
+                ]
             },
-            {
-                "concept":    "data integrity checking",
-                "keywords":   ["integrity","corrupt","checksum","hash","verif","accurate","consistent","tamper","concurrent"],
-                "missing_if": ["sha","md5","hash","checksum","crc","digest","hmac","sign","certif"],
-                "issue":      "does not specify the method used to verify that data has not been altered",
+
+            "minimum_missing": 1,
+            "priority": 9,
+
+            "issue": (
+                "does not fully define the failure condition, failover "
+                "destination, switchover behaviour, or recovery objective"
+            ),
+
+            "suggestion": (
+                "The system shall [automatically or manually] fail over "
+                "from [primary component] to [approved standby component] "
+                "when [defined failure condition] occurs, completing the "
+                "switchover within [approved recovery objective]."
+            )
+        },
+
+        {
+            "concept": "denial of service protection",
+
+            "strong_triggers": [
+                "denial of service",
+                "distributed denial of service",
+                "ddos",
+                "dos attack",
+                "traffic flooding",
+                "request flooding",
+                "traffic overload",
+                "resource exhaustion"
+            ],
+
+            "trigger_groups": [
+                ["malicious traffic", "block"],
+                ["excessive requests", "limit"],
+                ["request rate", "limit"],
+                ["traffic", "mitigate"],
+                ["traffic", "throttle"]
+            ],
+
+            "exclude_if": [
+                "normal network traffic report",
+                "traffic statistics display",
+                "road traffic"
+            ],
+
+            "required_groups": {
+                "detection condition": [
+                    "threshold",
+                    "requests per",
+                    "traffic rate",
+                    "abnormal traffic",
+                    "excessive requests",
+                    "resource threshold",
+                    "detection rule"
+                ],
+
+                "mitigation action": [
+                    "rate limit",
+                    "rate-limit",
+                    "throttle",
+                    "traffic filtering",
+                    "block",
+                    "drop request",
+                    "waf",
+                    "firewall",
+                    "mitigate"
+                ],
+
+                "protected service": [
+                    "api",
+                    "website",
+                    "service",
+                    "application",
+                    "network",
+                    "endpoint",
+                    "specified service"
+                ],
+
+                "notification or monitoring": [
+                    "alert",
+                    "notify",
+                    "monitor",
+                    "security team",
+                    "administrator",
+                    "log event"
+                ]
             },
-            {
-                "concept":    "backup and recovery",
-                "keywords":   ["backup","recover","restore","redundan","failsafe","data loss","replac"],
-                "missing_if": ["rpo","rto","frequency","daily","hourly","weekly","offsite","test",
-                               "verif","point-in-time","snapshot"],
-                "issue":      "does not specify backup frequency, recovery objectives, or how recovery is tested",
+
+            "minimum_missing": 2,
+            "priority": 8,
+
+            "issue": (
+                "does not fully specify the detection condition, mitigation "
+                "action, protected service, or security notification"
+            ),
+
+            "suggestion": (
+                "The system shall detect abnormal request or traffic rates "
+                "for [specified service], apply [approved rate-limiting or "
+                "traffic-filtering control] when [defined threshold] is "
+                "exceeded, and notify [responsible security role]."
+            )
+        },
+
+        {
+            "concept": "maintenance and patching",
+
+            "strong_triggers": [
+                "security patch",
+                "software patch",
+                "patch management",
+                "vulnerability patch",
+                "security update",
+                "vulnerability update",
+                "antivirus update",
+                "malware definition update"
+            ],
+
+            "trigger_groups": [
+                ["patch", "vulnerability"],
+                ["update", "security vulnerability"],
+                ["update", "malware definition"]
+            ],
+
+            "exclude_if": [
+                "update profile",
+                "update address",
+                "update booking",
+                "update customer",
+                "update record",
+                "update report",
+                "update product",
+                "update account information"
+            ],
+
+            "required_groups": {
+                "deployment timeframe": [
+                    "within",
+                    "hours",
+                    "days",
+                    "severity",
+                    "critical patch",
+                    "high-severity",
+                    "approved timeframe",
+                    "patch schedule"
+                ],
+
+                "pre-deployment testing": [
+                    "test",
+                    "tested",
+                    "staging",
+                    "pre-production",
+                    "validation environment"
+                ],
+
+                "controlled deployment": [
+                    "maintenance window",
+                    "approved deployment",
+                    "change management",
+                    "rollback",
+                    "backout plan",
+                    "deployment approval"
+                ]
             },
-        ],
-        "Availability": [
-            {
-                "concept":    "uptime / availability target",
-                "keywords":   ["availab","uptime","downtime","online","service","24","continuous","always"],
-                "missing_if": ["99","percent","%","sla","hours","minute","second","month","year","nines"],
-                "issue":      "does not define a measurable availability target or Service Level Agreement (SLA)",
-            },
-            {
-                "concept":    "failover and redundancy",
-                "keywords":   ["failover","redundan","backup server","replica","cluster","disaster","recover","downtime","outage"],
-                "missing_if": ["automatic","seconds","minutes","switch","standby","primary","secondary",
-                               "hot","warm","cold","rto","within"],
-                "issue":      "does not specify the failover mechanism, switchover time, or redundancy configuration",
-            },
-            {
-                "concept":    "denial of service protection",
-                "keywords":   ["dos","ddos","denial","attack","flood","traffic","load","overload","abuse","protect","prevent"],
-                "missing_if": ["rate limit","throttle","block","firewall","waf","filter","detect","mitigat",
-                               "cdn","threshold","request"],
-                "issue":      "does not specify the mechanism or thresholds used to detect and block attacks",
-            },
-            {
-                "concept":    "maintenance and patching",
-                "keywords":   ["update","patch","virus","antivirus","malware","software","security update","vulnerab"],
-                "missing_if": ["schedule","automatic","within","hours","days","window","notify","test",
-                               "approval","rollback"],
-                "issue":      "does not specify how updates are scheduled, tested, or deployed to minimise disruption",
-            },
-        ],
+
+            "minimum_missing": 1,
+            "priority": 7,
+
+            "issue": (
+                "does not fully specify the patching timeframe, testing "
+                "process, or controlled deployment procedure"
+            ),
+
+            "suggestion": (
+                "The system shall apply approved security patches within "
+                "[severity-based organisational timeframe], test the patches "
+                "in [approved pre-production environment] before deployment, "
+                "and provide an approved rollback procedure."
+            )
+        }
+    ]
+}
+
+
+# ============================================================
+# MATCHING FUNCTIONS
+# ============================================================
+
+def normalise_text(text):
+    """
+    Normalises text only for matching.
+    It does not modify the original displayed requirement.
+    """
+
+    text = str(text).lower()
+    text = text.replace("’", "'")
+    text = text.replace("–", "-")
+    text = text.replace("—", "-")
+    text = re.sub(r"\s+", " ", text)
+
+    return text.strip()
+
+
+def contains_term(text, term):
+    """
+    Checks whether a word or phrase appears in the requirement.
+    """
+
+    text = normalise_text(text)
+    term = normalise_text(term)
+
+    if not term:
+        return False
+
+    # Phrase or symbol-based matching
+    if (
+        " " in term
+        or "-" in term
+        or "%" in term
+        or "/" in term
+    ):
+        return term in text
+
+    pattern = rf"\b{re.escape(term)}\b"
+
+    return re.search(pattern, text) is not None
+
+
+def any_term_present(text, terms):
+    """
+    Returns True if at least one listed term appears.
+    """
+
+    return any(
+        contains_term(text, term)
+        for term in terms
+    )
+
+
+def trigger_group_present(text, trigger_group):
+    """
+    Returns True if every term in one trigger group appears.
+    """
+
+    return all(
+        contains_term(text, term)
+        for term in trigger_group
+    )
+
+
+def find_missing_groups(requirement, required_groups):
+    """
+    Returns the names of detail groups not found in the requirement.
+    """
+
+    missing_groups = []
+
+    for group_name, indicators in required_groups.items():
+
+        group_found = any_term_present(
+            requirement,
+            indicators
+        )
+
+        if not group_found:
+            missing_groups.append(group_name)
+
+    return missing_groups
+
+
+# ============================================================
+# RULE EVALUATION
+# ============================================================
+
+def evaluate_rule(requirement, rule):
+    """
+    Evaluates one requirement against one rule.
+
+    Returns a scored recommendation when:
+    - the concept is relevant;
+    - no exclusion phrase is found;
+    - enough important details are missing.
+
+    Otherwise, returns None.
+    """
+
+    requirement_lower = normalise_text(requirement)
+
+    # Check exclusions
+    if any_term_present(
+        requirement_lower,
+        rule.get("exclude_if", [])
+    ):
+        return None
+
+    # Strong trigger matches
+    strong_matches = [
+        trigger
+        for trigger in rule.get("strong_triggers", [])
+        if contains_term(requirement_lower, trigger)
+    ]
+
+    # Trigger-group matches
+    group_matches = [
+        group
+        for group in rule.get("trigger_groups", [])
+        if trigger_group_present(requirement_lower, group)
+    ]
+
+    concept_relevant = (
+        len(strong_matches) > 0
+        or len(group_matches) > 0
+    )
+
+    if not concept_relevant:
+        return None
+
+    # Find missing details
+    missing_details = find_missing_groups(
+        requirement_lower,
+        rule.get("required_groups", {})
+    )
+
+    minimum_missing = rule.get(
+        "minimum_missing",
+        1
+    )
+
+    if len(missing_details) < minimum_missing:
+        return None
+
+    # Score used to select one best recommendation
+    score = (
+        rule.get("priority", 0) * 10
+        + len(strong_matches) * 5
+        + len(group_matches) * 4
+        + len(missing_details) * 3
+    )
+
+    return {
+        "concept": rule["concept"],
+        "issue": rule["issue"],
+        "suggestion": rule["suggestion"],
+        "missing_details": missing_details,
+        "score": score
     }
-    
-    #Detect vagueness
-    
-    def detect_vagueness(requirement, cia_category):
-            """
-            Checks a requirement against vagueness rules for its CIA category.
-            Returns a list of issues found — empty list means requirement is specific enough.
-            """
-            req_lower = requirement.lower()
-            issues = []
-     
-            rules = VAGUENESS_RULES.get(cia_category, [])
-            for rule in rules:
-                concept_mentioned = any(kw in req_lower for kw in rule["keywords"])
-                if not concept_mentioned:
-                    continue
-                already_specific = any(spec in req_lower for spec in rule["missing_if"])
-                if not already_specific:
-                    issues.append({
-                        "concept":    rule["concept"],
-                        "issue":      rule["issue"],
-                        "suggestion": build_suggestion(requirement, cia_category, rule["concept"]),
-                    })
-            return issues
-    
-    #Generate Recommendations
-    
-    def generate_recommendations(results_df):
-            """
-            Iterates through all Security requirements, runs vagueness detection,
-            and returns a list of recommendation dicts for vague ones only.
-            """
-            recommendations = []
-            sec_rows = results_df[results_df["Phase I (Type)"] == "Security"].reset_index()
-     
-            for _, row in sec_rows.iterrows():
-                req   = row["Sentence"]
-                cia   = row["Phase II (CIA)"]
-                idx   = row["index"] + 1   # original row number
-     
-                if cia == "N/A":
-                    continue
-     
-                issues = detect_vagueness(req, cia)
-                if issues:
-                    issue = issues[0]
-                    recommendations.append({
-                        "req_number":  idx,
-                        "requirement": req,
-                        "cia":         cia,
-                        "concept":     issue["concept"],
-                        "issue":       issue["issue"],
-                        "suggestion":  issue["suggestion"],
-                    })
-            return recommendations
-    
-    #Display recs
-    
-    recs = generate_recommendations(results_df)
-     
-    if not recs:
-        st.success("All security requirements appear specific and complete. No improvements suggested.")
+
+
+# ============================================================
+# DETECT ONE BEST RECOMMENDATION
+# ============================================================
+
+def detect_vagueness(requirement, cia_category):
+    """
+    Returns one best recommendation, or None.
+
+    Each requirement receives at most one recommendation.
+    """
+
+    if not isinstance(requirement, str):
+        return None
+
+    requirement = requirement.strip()
+
+    if not requirement:
+        return None
+
+    if cia_category not in [
+        "Confidentiality",
+        "Integrity",
+        "Availability"
+    ]:
+        return None
+
+    candidates = []
+
+    rules = SECURITY_IMPROVEMENT_RULES.get(
+        cia_category,
+        []
+    )
+
+    for rule in rules:
+
+        result = evaluate_rule(
+            requirement,
+            rule
+        )
+
+        if result is not None:
+            candidates.append(result)
+
+    if not candidates:
+        return None
+
+    # Select only one highest-scoring recommendation
+    best_result = max(
+        candidates,
+        key=lambda item: item["score"]
+    )
+
+    return best_result
+
+
+# ============================================================
+# GENERATE RECOMMENDATIONS
+# ============================================================
+
+def generate_recommendations(results_df):
+    """
+    Processes only requirements classified as Security.
+
+    A requirement receives:
+    - zero recommendations; or
+    - one recommendation.
+    """
+
+    recommendations = []
+
+    required_columns = [
+        "Sentence",
+        "Phase I (Type)",
+        "Phase II (CIA)"
+    ]
+
+    missing_columns = [
+        column
+        for column in required_columns
+        if column not in results_df.columns
+    ]
+
+    if missing_columns:
+        st.error(
+            "Recommendation system cannot run because these "
+            f"columns are missing: {', '.join(missing_columns)}"
+        )
+        return recommendations
+
+    security_rows = results_df[
+        results_df["Phase I (Type)"]
+        .astype(str)
+        .str.strip()
+        .str.lower()
+        .eq("security")
+    ]
+
+    for original_index, row in security_rows.iterrows():
+
+        requirement = str(
+            row["Sentence"]
+        ).strip()
+
+        cia_category = str(
+            row["Phase II (CIA)"]
+        ).strip()
+
+        if not requirement:
+            continue
+
+        if cia_category in [
+            "",
+            "N/A",
+            "NA",
+            "None",
+            "nan"
+        ]:
+            continue
+
+        best_result = detect_vagueness(
+            requirement,
+            cia_category
+        )
+
+        # No recommendation is needed
+        if best_result is None:
+            continue
+
+        recommendations.append({
+            "req_number": original_index + 1,
+            "requirement": requirement,
+            "cia": cia_category,
+            "concept": best_result["concept"],
+            "issue": best_result["issue"],
+            "missing_details": best_result["missing_details"],
+            "suggestion": best_result["suggestion"]
+        })
+
+    return recommendations
+
+
+# ============================================================
+# RUN RECOMMENDATION SYSTEM
+# ============================================================
+
+recs = generate_recommendations(
+    results_df
+)
+
+
+# ============================================================
+# DISPLAY RECOMMENDATIONS
+# ============================================================
+
+if not recs:
+
+    st.success(
+        "No security requirements require an improvement "
+        "based on the current recommendation rules."
+    )
+
+else:
+
+    st.info(
+        f"**{len(recs)} improvement suggestion(s) found.** "
+        "Each requirement receives at most one suggestion."
+    )
+
+    for recommendation_number, rec in enumerate(
+        recs,
+        start=1
+    ):
+
+        title = (
+            f"Suggestion {recommendation_number} — "
+            f"Requirement #{rec['req_number']} "
+            f"[{rec['cia']}]"
+        )
+
+        with st.expander(title):
+
+            st.write("**Original Requirement:**")
+            st.info(rec["requirement"])
+
+            st.write(
+                f"**CIA Category:** `{rec['cia']}`"
+            )
+
+            st.write(
+                f"**Security Concept:** `{rec['concept']}`"
+            )
+
+            st.write("**Issue Detected:**")
+            st.warning(
+                f"This requirement {rec['issue']}."
+            )
+
+            st.write("**Missing Details:**")
+
+            for detail in rec["missing_details"]:
+                st.write(
+                    f"- {detail.capitalize()}"
+                )
+
+            st.write("**Recommended Improvement:**")
+            st.success(rec["suggestion"])
+
+            st.write("**Reason:**")
+            st.caption(
+                "The suggested revision adds important missing "
+                "details so that the security requirement is "
+                "clearer and easier to test. Values inside square "
+                "brackets must be decided by project stakeholders."
+            )
+
+
+# ============================================================
+# ADD RECOMMENDATIONS TO REPORT
+# ============================================================
+
+st.write("---")
+
+if st.button(
+    "Add Recommendations to Report",
+    type="primary"
+):
+
+    st.session_state["recs"] = recs
+
+    if recs:
+        st.success(
+            "Recommendations added. See the table below."
+        )
     else:
-        st.info(f"**{len(recs)} improvement suggestion(s) found** across {len(set(r['req_number'] for r in recs))} security requirement(s).")
- 
-        for i, rec in enumerate(recs, 1):
-            with st.expander(f"Suggestion {i} — Requirement #{rec['req_number']} [{rec['cia']}]"):
-                st.write(f"**Original Requirement:**")
-                st.info(rec["requirement"])
-                st.write(f"**CIA Category:** `{rec['cia']}`")
-                st.write(f"**Security Concept:** `{rec['concept']}`")
-                st.write(f"**Issue Detected:**")
-                st.warning(f"This requirement {rec['issue']}.")
-                st.write(f"**Recommended Improvement:**")
-                st.success(rec["suggestion"])
-                st.write(f"**Reason:**")
-                st.caption("The revised requirement is more specific, measurable, and testable — making it easier for developers to implement and for testers to verify.")
-
-    #Add to report function 
-    
-    st.write("---")
-    if st.button("Add Recommendations to Report", type="primary"):
-        st.session_state["recs"] = recs
-        st.success("Recommendations added. See the table below.")
-
-    if "recs" in st.session_state and st.session_state["recs"]:
-        st.write("### Recommendations Table")
-        rec_df = pd.DataFrame([{
-            "Req #":             r["req_number"],
-            "Original Requirement": r["requirement"],
-            "CIA Category":      r["cia"],
-            "Concept":           r["concept"],
-            "Issue":             r["issue"],
-            "Recommended Improvement": r["suggestion"],
-            "Reason":            "The revised requirement is more specific, measurable, and testable."
-        } for r in st.session_state["recs"]])
-
-        st.dataframe(rec_df, use_container_width=True)
-
-        rec_csv = rec_df.to_csv(index=False)
-        st.download_button(
-            "Download Recommendations as CSV",
-            rec_csv,
-            "security_recommendations.csv",
-            "text/csv"
+        st.info(
+            "There are no recommendations to add."
         )
 
-        rec_txt_lines = ["SECURITY REQUIREMENTS RECOMMENDATIONS", "=" * 65]
-        for r in st.session_state["recs"]:
-            rec_txt_lines += [
-                f"\nRequirement #{r['req_number']} [{r['cia']}]",
-                f"Original  : {r['requirement']}",
-                f"Concept   : {r['concept']}",
-                f"Issue     : This requirement {r['issue']}.",
-                f"Suggested : {r['suggestion']}",
-                f"Reason    : The revised requirement is more specific, measurable, and testable.",
-                "-" * 65
-            ]
-        rec_txt = "\n".join(rec_txt_lines)
-        st.download_button(
-            "Download Recommendations as TXT",
-            rec_txt,
-            "security_recommendations.txt",
-            "text/plain"
+
+# ============================================================
+# RECOMMENDATIONS TABLE
+# ============================================================
+
+if (
+    "recs" in st.session_state
+    and st.session_state["recs"]
+):
+
+    st.write("### Recommendations Table")
+
+    rec_df = pd.DataFrame([
+        {
+            "Req #": rec["req_number"],
+            "Original Requirement": rec["requirement"],
+            "CIA Category": rec["cia"],
+            "Concept": rec["concept"],
+            "Issue": rec["issue"],
+            "Missing Details": ", ".join(
+                rec["missing_details"]
+            ),
+            "Recommended Improvement": rec["suggestion"],
+            "Reason": (
+                "The recommendation adds missing details "
+                "to make the requirement clearer and more testable."
+            )
+        }
+        for rec in st.session_state["recs"]
+    ])
+
+    st.dataframe(
+        rec_df,
+        use_container_width=True
+    )
+
+
+    # CSV DOWNLOAD
+
+    rec_csv = rec_df.to_csv(
+        index=False
+    ).encode("utf-8-sig")
+
+    st.download_button(
+        label="Download Recommendations as CSV",
+        data=rec_csv,
+        file_name="security_recommendations.csv",
+        mime="text/csv"
+    )
+
+    # TXT DOWNLOAD
+
+    rec_txt_lines = [
+        "SECURITY REQUIREMENTS RECOMMENDATIONS",
+        "=" * 70
+    ]
+
+    for rec in st.session_state["recs"]:
+
+        missing_details_text = ", ".join(
+            rec["missing_details"]
         )
+
+        rec_txt_lines.extend([
+            "",
+            (
+                f"Requirement #{rec['req_number']} "
+                f"[{rec['cia']}]"
+            ),
+            f"Original        : {rec['requirement']}",
+            f"Concept         : {rec['concept']}",
+            f"Issue           : This requirement {rec['issue']}.",
+            f"Missing Details : {missing_details_text}",
+            f"Suggested       : {rec['suggestion']}",
+            (
+                "Reason          : The recommendation adds "
+                "missing details so that the requirement is "
+                "clearer and more testable."
+            ),
+            (
+                "Note            : Values inside square brackets "
+                "must be determined by project stakeholders."
+            ),
+            "-" * 70
+        ])
+
+    rec_txt = "\n".join(
+        rec_txt_lines
+    )
+
+    st.download_button(
+        label="Download Recommendations as TXT",
+        data=rec_txt.encode("utf-8"),
+        file_name="security_recommendations.txt",
+        mime="text/plain"
+    )
             
 #Clear results button------------------------------------------------------------
 
