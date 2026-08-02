@@ -737,109 +737,189 @@ CIA TRIAD BREAKDOWN:
     st.write("## Security Requirements Recommendation System")
     st.caption("Analyses each security requirements for vagueness and suggests improvements based on CIA Triad best practices.")
     
-    #Vagueness rules
-    VAGUENESS_RULES = {
-            "Confidentiality": [
-                {
-                    "concept":    "authentication",
-                    "keywords":   ["access","login","unauthori","authenti","authoris","authoriz","user","identity"],
-                    "missing_if": ["password","mfa","multi-factor","two-factor","biometric","token","otp",
-                                   "certificate","sso","single sign","oauth","saml","ldap","authenticate"],
-                    "issue":      "does not specify how users are authenticated",
-                    "suggestion": "The system shall authenticate users using [method e.g. password, MFA, token] before granting access to [specific resource]."
-                },
-                {
-                    "concept":    "authorisation",
-                    "keywords":   ["access","restrict","only","authoris","authoriz","permission","privilege","role"],
-                    "missing_if": ["role","rbac","role-based","permission","privilege","policy","acl","group",
-                                   "admin","manager","level","tier"],
-                    "issue":      "does not specify how authorisation is enforced or which roles are permitted",
-                    "suggestion": "The system shall enforce role-based access control, granting access to [resource] only to users with the [role] role."
-                },
-                {
-                    "concept":    "encryption",
-                    "keywords":   ["encrypt","protect","secure","confidential","sensitive","private","personal"],
-                    "missing_if": ["aes","rsa","tls","ssl","https","256","128","end-to-end","e2e","at rest",
-                                   "in transit","in-transit","algorithm","cipher"],
-                    "issue":      "does not specify the encryption standard or method used",
-                    "suggestion": "The system shall encrypt [data type] using AES-256 at rest and TLS 1.2 or higher in transit."
-                },
-                {
-                    "concept":    "data privacy",
-                    "keywords":   ["privacy","personal","pii","gdpr","data","information","customer","patient"],
-                    "missing_if": ["gdpr","pdpa","hipaa","consent","anonymi","pseudonym","retention","delete",
-                                   "purge","minimum","purpose","lawful"],
-                    "issue":      "does not reference a specific privacy standard, regulation, or data handling policy",
-                    "suggestion": "The system shall handle personal data in compliance with [regulation e.g. GDPR/PDPA], ensuring data is collected only for specified purposes and retained no longer than necessary."
-                },
-            ],
-            "Integrity": [
-                {
-                    "concept":    "input validation",
-                    "keywords":   ["input","data","enter","submit","upload","form","field","inject","valid","sanitise","sanitize"],
-                    "missing_if": ["whitelist","blacklist","regex","format","type","length","range","sanitise",
-                                   "sanitize","escape","parameteris","parameteriz","bound"],
-                    "issue":      "does not specify how input is validated or what validation rules are applied",
-                    "suggestion": "The system shall validate all user input by enforcing [type/length/format] constraints and rejecting input that does not conform to the defined whitelist."
-                },
-                {
-                    "concept":    "audit logging",
-                    "keywords":   ["log","audit","track","record","monitor","change","modif","transaction","histor"],
-                    "missing_if": ["who","user id","timestamp","time","what","before","after","retain","store",
-                                   "tamper","immut","read-only","review"],
-                    "issue":      "does not specify what information is logged, how long logs are retained, or how they are protected",
-                    "suggestion": "The system shall maintain an immutable audit log recording who performed the action, what was changed, and when, retaining logs for a minimum of [duration]."
-                },
-                {
-                    "concept":    "data integrity checking",
-                    "keywords":   ["integrity","corrupt","checksum","hash","verif","accurate","consistent","tamper"],
-                    "missing_if": ["sha","md5","hash","checksum","crc","digest","hmac","sign","certif"],
-                    "issue":      "does not specify the integrity verification method or algorithm used",
-                    "suggestion": "The system shall verify data integrity using [e.g. SHA-256 checksums / HMAC] before processing or storing data."
-                },
-                {
-                    "concept":    "backup and recovery",
-                    "keywords":   ["backup","recover","restore","replac","redundan","failsafe","data loss"],
-                    "missing_if": ["rpo","rto","frequency","daily","hourly","weekly","offsite","test","verif",
-                                   "point-in-time","snapshot"],
-                    "issue":      "does not specify backup frequency, recovery time objective (RTO), or recovery point objective (RPO)",
-                    "suggestion": "The system shall perform automated backups every [frequency], with an RTO of [X hours] and RPO of [Y hours], and backups shall be tested monthly."
-                },
-            ],
-            "Availability": [
-                {
-                    "concept":    "uptime / availability target",
-                    "keywords":   ["availab","uptime","downtime","online","service","access","24","continuous"],
-                    "missing_if": ["99","percent","%","sla","hours","minute","second","month","year","nines"],
-                    "issue":      "does not specify a measurable availability target or SLA",
-                    "suggestion": "The system shall maintain a minimum uptime of 99.9% measured monthly, as defined in the Service Level Agreement."
-                },
-                {
-                    "concept":    "failover and redundancy",
-                    "keywords":   ["failover","redundan","backup server","replica","cluster","disaster","recover","downtime","outage"],
-                    "missing_if": ["automatic","seconds","minutes","switch","standby","primary","secondary",
-                                   "hot","warm","cold","rto","within"],
-                    "issue":      "does not specify the failover mechanism, switchover time, or redundancy configuration",
-                    "suggestion": "The system shall automatically switch to a standby server within [X seconds] of a primary server failure, with no data loss."
-                },
-                {
-                    "concept":    "denial of service protection",
-                    "keywords":   ["dos","ddos","denial","attack","flood","traffic","load","overload","abuse"],
-                    "missing_if": ["rate limit","throttle","block","firewall","waf","filter","detect","mitigat",
-                                   "cdn","cloudflare","threshold"],
-                    "issue":      "does not specify the mitigation mechanism or thresholds for detecting and blocking attacks",
-                    "suggestion": "The system shall implement rate limiting and traffic filtering to detect and mitigate denial-of-service attacks, blocking sources exceeding [X] requests per second."
-                },
-                {
-                    "concept":    "maintenance and patching",
-                    "keywords":   ["update","patch","virus","antivirus","malware","software","security update","vulnerab"],
-                    "missing_if": ["schedule","automatic","within","hours","days","window","notify","test",
-                                   "approval","rollback"],
-                    "issue":      "does not specify how updates are applied, tested, or scheduled to minimise service disruption",
-                    "suggestion": "The system shall apply security patches within [X days] of release, with updates tested in a staging environment before deployment and executed during scheduled maintenance windows."
-                },
-            ],
+    def extract_subject(requirement):
+        """
+        Extracts the core subject from a requirement sentence.
+        e.g. 'The system shall provide access to patient records'
+             → 'patient records'
+        """
+        req = requirement.strip().rstrip(".")
+        # Try to find what comes after common SRS verbs
+        patterns = [
+            r"shall (?:provide|allow|give|grant|enable|support|ensure|restrict|protect|prevent|maintain|store|manage|display|generate|send|create|delete|update|modify|access|record|log|encrypt|authenticate|authorise|authorize)\s+(.*)",
+            r"must (?:provide|allow|give|grant|enable|support|ensure|restrict|protect|prevent|maintain|store|manage|display|generate|send|create|delete|update|modify|access|record|log|encrypt|authenticate|authorise|authorize)\s+(.*)",
+            r"will (?:provide|allow|give|grant|enable|support|ensure|restrict|protect|prevent|maintain|store|manage|display|generate|send|create|delete|update|modify|access|record|log|encrypt|authenticate|authorise|authorize)\s+(.*)",
+        ]
+        for pattern in patterns:
+            m = re.search(pattern, req, re.IGNORECASE)
+            if m:
+                # Take first clause only (before semicolon or comma)
+                subject = m.group(1).split(";")[0].split(",")[0].strip()
+                # Trim to reasonable length
+                words = subject.split()
+                return " ".join(words[:10]) if len(words) > 10 else subject
+        return "the specified resource"
+ 
+    def build_suggestion(requirement, cia_category, concept):
+        """
+        Builds a contextual suggestion by taking the original requirement
+        and appending what is missing — rather than replacing the whole sentence.
+        """
+        req   = requirement.strip().rstrip(".")
+        subj  = extract_subject(requirement)
+ 
+        templates = {
+            # Confidentiality
+            ("Confidentiality", "authentication"): (
+                f"{req}, and the system shall verify user identity through "
+                f"[e.g. password, MFA, or token-based authentication] before granting access."
+            ),
+            ("Confidentiality", "authorisation"): (
+                f"{req}, and access shall be restricted based on the user's assigned role, "
+                f"ensuring only authorised roles can perform this action."
+            ),
+            ("Confidentiality", "encryption"): (
+                f"{req}, and all data shall be encrypted using AES-256 at rest "
+                f"and TLS 1.2 or higher during transmission."
+            ),
+            ("Confidentiality", "data privacy"): (
+                f"{req}, in compliance with applicable data privacy regulations "
+                f"[e.g. GDPR/PDPA/HIPAA], ensuring data is collected only for "
+                f"stated purposes and retained no longer than necessary."
+            ),
+            # Integrity
+            ("Integrity", "input validation"): (
+                f"{req}, and all input shall be validated against defined type, "
+                f"length, and format rules before processing, rejecting any non-conforming data."
+            ),
+            ("Integrity", "audit logging"): (
+                f"{req}, and the system shall record an audit log entry capturing "
+                f"the user ID, action performed, timestamp, and data changed, "
+                f"retained for a minimum of [X months]."
+            ),
+            ("Integrity", "data integrity checking"): (
+                f"{req}, and data integrity shall be verified using [e.g. SHA-256 "
+                f"checksums or HMAC] before storage and after retrieval."
+            ),
+            ("Integrity", "backup and recovery"): (
+                f"{req}, and automated backups shall be performed every [frequency] "
+                f"with a recovery time objective (RTO) of [X hours] and recovery "
+                f"point objective (RPO) of [Y hours]."
+            ),
+            # Availability
+            ("Availability", "uptime / availability target"): (
+                f"{req}, and the system shall maintain a minimum uptime of 99.9% "
+                f"measured monthly, as defined in the Service Level Agreement."
+            ),
+            ("Availability", "failover and redundancy"): (
+                f"{req}, and the system shall automatically switch to a standby "
+                f"instance within [X seconds] of a primary failure with no data loss."
+            ),
+            ("Availability", "denial of service protection"): (
+                f"{req}, and the system shall implement rate limiting and traffic "
+                f"filtering to detect and block sources exceeding [X] requests per second."
+            ),
+            ("Availability", "maintenance and patching"): (
+                f"{req}, and security patches shall be applied within [X days] of "
+                f"release, tested in a staging environment, and deployed during "
+                f"scheduled maintenance windows."
+            ),
         }
+ 
+        key = (cia_category, concept)
+        return templates.get(key, f"{req}, with additional security controls applied as appropriate.")
+ 
+    VAGUENESS_RULES = {
+        "Confidentiality": [
+            {
+                "concept":    "authentication",
+                "keywords":   ["access","login","unauthori","authenti","authoris","authoriz","identity","user","provide","allow","grant","physician","patient","clinical","clinical encounter","modified","modify"],
+                "missing_if": ["password","mfa","multi-factor","two-factor","biometric","token","otp",
+                               "certificate","sso","single sign","oauth","saml","ldap","authenticate",
+                               "login","credential","verif"],
+                "issue":      "does not specify how user identity is verified before access is granted",
+            },
+            {
+                "concept":    "authorisation",
+                "keywords":   ["only","restrict","authoris","authoriz","permission","privilege","role","specific","certain"],
+                "missing_if": ["role","rbac","role-based","permission","privilege","policy","acl","group",
+                               "admin","manager","level","tier","physician","nurse","staff"],
+                "issue":      "does not specify which roles or user groups are permitted to perform this action",
+            },
+            {
+                "concept":    "encryption",
+                "keywords":   ["encrypt","protect data","secure data","confidential","sensitive","private","personal data"],
+                "missing_if": ["aes","rsa","tls","ssl","https","256","128","end-to-end","e2e",
+                               "at rest","in transit","algorithm","cipher"],
+                "issue":      "does not specify the encryption standard or method to be used",
+            },
+            {
+                "concept":    "data privacy",
+                "keywords":   ["privacy","personal information","pii","patient data","patient record","health","medical"],
+                "missing_if": ["gdpr","pdpa","hipaa","consent","anonymi","pseudonym","retention",
+                               "delete","purge","purpose","lawful","complian"],
+                "issue":      "does not reference a data privacy regulation or policy governing the handling of this data",
+            },
+        ],
+        "Integrity": [
+            {
+                "concept":    "input validation",
+                "keywords":   ["input","data entry","enter","submit","upload","form","field","inject","valid","sanitise","sanitize","modif"],
+                "missing_if": ["whitelist","blacklist","regex","format","type","length","range","sanitise",
+                               "sanitize","escape","parameteris","parameteriz","bound","constrain"],
+                "issue":      "does not specify how input data is validated or what constraints are enforced",
+            },
+            {
+                "concept":    "audit logging",
+                "keywords":   ["log","audit","track","record","monitor","change","modif","transaction","histor","concurrent"],
+                "missing_if": ["who","user id","timestamp","time","what","before","after","retain",
+                               "tamper","immut","read-only","review","duration"],
+                "issue":      "does not specify what is logged, how long logs are retained, or how they are protected from tampering",
+            },
+            {
+                "concept":    "data integrity checking",
+                "keywords":   ["integrity","corrupt","checksum","hash","verif","accurate","consistent","tamper","concurrent"],
+                "missing_if": ["sha","md5","hash","checksum","crc","digest","hmac","sign","certif"],
+                "issue":      "does not specify the method used to verify that data has not been altered",
+            },
+            {
+                "concept":    "backup and recovery",
+                "keywords":   ["backup","recover","restore","redundan","failsafe","data loss","replac"],
+                "missing_if": ["rpo","rto","frequency","daily","hourly","weekly","offsite","test",
+                               "verif","point-in-time","snapshot"],
+                "issue":      "does not specify backup frequency, recovery objectives, or how recovery is tested",
+            },
+        ],
+        "Availability": [
+            {
+                "concept":    "uptime / availability target",
+                "keywords":   ["availab","uptime","downtime","online","service","24","continuous","always"],
+                "missing_if": ["99","percent","%","sla","hours","minute","second","month","year","nines"],
+                "issue":      "does not define a measurable availability target or Service Level Agreement (SLA)",
+            },
+            {
+                "concept":    "failover and redundancy",
+                "keywords":   ["failover","redundan","backup server","replica","cluster","disaster","recover","downtime","outage"],
+                "missing_if": ["automatic","seconds","minutes","switch","standby","primary","secondary",
+                               "hot","warm","cold","rto","within"],
+                "issue":      "does not specify the failover mechanism, switchover time, or redundancy configuration",
+            },
+            {
+                "concept":    "denial of service protection",
+                "keywords":   ["dos","ddos","denial","attack","flood","traffic","load","overload","abuse","protect","prevent"],
+                "missing_if": ["rate limit","throttle","block","firewall","waf","filter","detect","mitigat",
+                               "cdn","threshold","request"],
+                "issue":      "does not specify the mechanism or thresholds used to detect and block attacks",
+            },
+            {
+                "concept":    "maintenance and patching",
+                "keywords":   ["update","patch","virus","antivirus","malware","software","security update","vulnerab"],
+                "missing_if": ["schedule","automatic","within","hours","days","window","notify","test",
+                               "approval","rollback"],
+                "issue":      "does not specify how updates are scheduled, tested, or deployed to minimise disruption",
+            },
+        ],
+    }
     
     #Detect vagueness
     
@@ -853,17 +933,15 @@ CIA TRIAD BREAKDOWN:
      
             rules = VAGUENESS_RULES.get(cia_category, [])
             for rule in rules:
-                # Check if this rule is relevant — does the requirement mention this concept?
                 concept_mentioned = any(kw in req_lower for kw in rule["keywords"])
                 if not concept_mentioned:
                     continue
-                # If concept is mentioned, check if it's already specific enough
                 already_specific = any(spec in req_lower for spec in rule["missing_if"])
                 if not already_specific:
                     issues.append({
                         "concept":    rule["concept"],
                         "issue":      rule["issue"],
-                        "suggestion": rule["suggestion"],
+                        "suggestion": build_suggestion(requirement, cia_category, rule["concept"]),
                     })
             return issues
     
