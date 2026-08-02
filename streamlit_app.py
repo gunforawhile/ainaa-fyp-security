@@ -886,7 +886,8 @@ CIA TRIAD BREAKDOWN:
                     continue
      
                 issues = detect_vagueness(req, cia)
-                for issue in issues:
+                if issues:
+                    issue = issues[0]
                     recommendations.append({
                         "req_number":  idx,
                         "requirement": req,
@@ -982,8 +983,12 @@ if "results_df" in st.session_state:
 # Footer------------------------------------------------------------------------
 
 st.write("---")
-st.caption("AI-Assisted Security Requirements Identifier | RoBERTa-base | Two-Phase Classification")
-
+st.markdown(
+    "<div style='text-align:center; color:gray; font-size:0.85em;'>"
+    "AI-Assisted Security Requirements Identifier | RoBERTa-base | Two-Phase Classification"
+    "</div>",
+    unsafe_allow_html=True
+)
 
 
 
