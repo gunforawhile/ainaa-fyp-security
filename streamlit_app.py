@@ -2174,16 +2174,23 @@ def generate_recommendations(results_df):
 # RUN RECOMMENDATION SYSTEM
 # ============================================================
 
-recs = generate_recommendations(
-    results_df
-)
+if "results_df" in st.session_state:
+    results_df = st.session_state["results_df"]
+    recs = generate_recommendations(results_df)
+else:
+    recs = []
 
+# Clear old recommendation results if no analysis result exists
+if not recs:
+    st.session_state.pop("recs", None)
 
 # ============================================================
 # DISPLAY RECOMMENDATIONS
 # ============================================================
+if "results_df" not in st.session_state:
+    pass
 
-if not recs:
+elif not recs:
 
     st.success(
         "No security requirements require an improvement "
@@ -2244,6 +2251,19 @@ else:
                 "brackets must be decided by project stakeholders."
             )
 
+
+    # Only show button when recommendations exist
+    st.write("---")
+
+    if st.button(
+        "Add Recommendations to Report",
+        type="primary"
+    ):
+        st.session_state["recs"] = recs
+
+        st.success(
+            "Recommendations added. See the table below."
+        )
 
 # ============================================================
 # ADD RECOMMENDATIONS TO REPORT
