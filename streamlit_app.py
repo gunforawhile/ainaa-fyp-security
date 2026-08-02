@@ -2249,24 +2249,19 @@ else:
 # ADD RECOMMENDATIONS TO REPORT
 # ============================================================
 
-st.write("---")
+if recs:
 
-if st.button(
-    "Add Recommendations to Report",
-    type="primary"
-):
+    st.write("---")
 
-    st.session_state["recs"] = recs
+    if st.button(
+        "Add Recommendations to Report",
+        type="primary"
+    ):
+        st.session_state["recs"] = recs
 
-    if recs:
         st.success(
             "Recommendations added. See the table below."
         )
-    else:
-        st.info(
-            "There are no recommendations to add."
-        )
-
 
 # ============================================================
 # RECOMMENDATIONS TABLE
