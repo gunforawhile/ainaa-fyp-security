@@ -224,84 +224,6 @@ def load_models():
     return phase1, phase2
  
 
-#Recommendations part--------------------------------------------------------------
-# RECOMMENDATION_RULES = [
-#     {
-#         "trigger_keywords": ["password", "login", "log in", "sign in", "credential"],
-#         "category": "Confidentiality - Authentication",
-#         "recommendation": "The system shall enforce strong password policies and multi-factor authentication for all user logins."
-#     },
-#     {
-#         "trigger_keywords": ["upload", "file", "document", "attachment"],
-#         "category": "Integrity - File Validation",
-#         "recommendation": "The system shall validate and scan uploaded files for malicious content before processing."
-#     },
-#     {
-#         "trigger_keywords": ["payment", "transaction", "checkout", "billing", "credit card"],
-#         "category": "Confidentiality - Data Encryption",
-#         "recommendation": "The system shall encrypt all payment and transaction data both in transit and at rest."
-#     },
-#     {
-#         "trigger_keywords": ["report", "export", "download data", "generate report"],
-#         "category": "Confidentiality - Access Control",
-#         "recommendation": "The system shall restrict report generation and data export to authorized roles only."
-#     },
-#     {
-#         "trigger_keywords": ["update", "edit", "modify", "delete", "change record"],
-#         "category": "Integrity - Change Tracking",
-#         "recommendation": "The system shall maintain an audit log of all create, update, and delete operations on critical records."
-#     },
-#     {
-#         "trigger_keywords": ["api", "integration", "third-party", "external service"],
-#         "category": "Confidentiality - API Security",
-#         "recommendation": "The system shall authenticate and authorize all API requests using secure tokens (e.g., JWT/OAuth)."
-#     },
-#     {
-#         "trigger_keywords": ["server", "uptime", "availability", "performance", "load"],
-#         "category": "Availability - Resilience",
-#         "recommendation": "The system shall implement redundancy and failover mechanisms to ensure continuous availability."
-#     },
-#     {
-#         "trigger_keywords": ["user data", "personal information", "profile", "customer data"],
-#         "category": "Confidentiality - Data Privacy",
-#         "recommendation": "The system shall comply with data privacy regulations (e.g., GDPR) when storing personal information."
-#     },
-#     {
-#         "trigger_keywords": ["search", "query", "filter", "input"],
-#         "category": "Integrity - Input Validation",
-#         "recommendation": "The system shall sanitize and validate all user input to prevent injection attacks."
-#     },
-#     {
-#         "trigger_keywords": ["notification", "email", "sms", "alert"],
-#         "category": "Confidentiality - Communication Security",
-#         "recommendation": "The system shall ensure notification channels do not leak sensitive information to unintended recipients."
-#     },
-# ]
- 
-# def recommend_security_requirements(functional_sentences):
-#     """
-#     Analyzes functional requirements to detect 'hidden' security needs
-#     using keyword matching combined with the classification engine.
-#     """
-#     recommendations = []
-#     for sentence in functional_sentences:
-#         sentence_lower = sentence.lower()
-#         matched_rules = []
-#         for rule in RECOMMENDATION_RULES:
-#             if any(kw in sentence_lower for kw in rule["trigger_keywords"]):
-#                 matched_rules.append(rule)
- 
-#         for rule in matched_rules:
-#             recommendations.append({
-#                 "Functional Requirement": sentence,
-#                 "Detected Security Gap": rule["category"],
-#                 "Recommended Security Requirement": rule["recommendation"]
-#             })
- 
-#     return pd.DataFrame(recommendations).drop_duplicates() if recommendations else pd.DataFrame(
-#         columns=["Functional Requirement", "Detected Security Gap", "Recommended Security Requirement"]
-#     )
-
 #Classification Functions----------------------------------------------------------------
 
 def phase1_classify(sentence, classifier):
@@ -739,9 +661,7 @@ CIA TRIAD BREAKDOWN:
     
     SECURITY_IMPROVEMENT_RULES = {
 
-    # ========================================================
     # CONFIDENTIALITY
-    # ========================================================
 
     "Confidentiality": [
 
@@ -1153,9 +1073,7 @@ CIA TRIAD BREAKDOWN:
         }
     ],
 
-    # ========================================================
     # INTEGRITY
-    # ========================================================
 
     "Integrity": [
 
@@ -1436,9 +1354,7 @@ CIA TRIAD BREAKDOWN:
         }
     ],
 
-    # ========================================================
     # AVAILABILITY
-    # ========================================================
 
     "Availability": [
 
@@ -1865,9 +1781,7 @@ CIA TRIAD BREAKDOWN:
 }
 
 
-# ============================================================
 # MATCHING FUNCTIONS
-# ============================================================
 
 def normalise_text(text):
     """
@@ -1951,9 +1865,7 @@ def find_missing_groups(requirement, required_groups):
     return missing_groups
 
 
-# ============================================================
 # RULE EVALUATION
-# ============================================================
 
 def evaluate_rule(requirement, rule):
     """
@@ -2029,9 +1941,7 @@ def evaluate_rule(requirement, rule):
     }
 
 
-# ============================================================
-# DETECT ONE BEST RECOMMENDATION
-# ============================================================
+# DETECT ONE BEST RECOMMENDATION 
 
 def detect_vagueness(requirement, cia_category):
     """
@@ -2084,9 +1994,7 @@ def detect_vagueness(requirement, cia_category):
     return best_result
 
 
-# ============================================================
 # GENERATE RECOMMENDATIONS
-# ============================================================
 
 def generate_recommendations(results_df):
     """
@@ -2170,9 +2078,7 @@ def generate_recommendations(results_df):
     return recommendations
 
 
-# ============================================================
 # RUN RECOMMENDATION SYSTEM
-# ============================================================
 
 if "results_df" in st.session_state:
     results_df = st.session_state["results_df"]
@@ -2184,9 +2090,7 @@ else:
 if not recs:
     st.session_state.pop("recs", None)
 
-# ============================================================
 # DISPLAY RECOMMENDATIONS
-# ============================================================
 if "results_df" not in st.session_state:
     pass
 
@@ -2265,9 +2169,7 @@ else:
             "Recommendations added. See the table below."
         )
 
-# ============================================================
 # ADD RECOMMENDATIONS TO REPORT
-# ============================================================
 
 if recs:
 
@@ -2283,9 +2185,7 @@ if recs:
             "Recommendations added. See the table below."
         )
 
-# ============================================================
 # RECOMMENDATIONS TABLE
-# ============================================================
 
 if (
     "recs" in st.session_state
