@@ -2086,23 +2086,22 @@ if "results_df" in st.session_state:
 else:
     recs = []
 
-# Clear old recommendation results if no analysis result exists
+# Remove old recommendations when no results exist
 if not recs:
     st.session_state.pop("recs", None)
+
 
 # DISPLAY RECOMMENDATIONS
 if "results_df" not in st.session_state:
     pass
 
 elif not recs:
-
     st.success(
         "No security requirements require an improvement "
         "based on the current recommendation rules."
     )
 
 else:
-
     st.info(
         f"**{len(recs)} improvement suggestion(s) found.** "
         "Each requirement receives at most one suggestion."
@@ -2112,7 +2111,6 @@ else:
         recs,
         start=1
     ):
-
         title = (
             f"Suggestion {recommendation_number} — "
             f"Requirement #{rec['req_number']} "
@@ -2155,13 +2153,12 @@ else:
                 "brackets must be decided by project stakeholders."
             )
 
-
-    # Only show button when recommendations exist
     st.write("---")
 
     if st.button(
         "Add Recommendations to Report",
-        type="primary"
+        type="primary",
+        key="add_recommendations_to_report_button"
     ):
         st.session_state["recs"] = recs
 
@@ -2186,12 +2183,10 @@ if recs:
         )
 
 # RECOMMENDATIONS TABLE
-
 if (
     "recs" in st.session_state
     and st.session_state["recs"]
 ):
-
     st.write("### Recommendations Table")
 
     rec_df = pd.DataFrame([
@@ -2218,9 +2213,6 @@ if (
         use_container_width=True
     )
 
-
-    # CSV DOWNLOAD
-
     rec_csv = rec_df.to_csv(
         index=False
     ).encode("utf-8-sig")
@@ -2229,10 +2221,9 @@ if (
         label="Download Recommendations as CSV",
         data=rec_csv,
         file_name="security_recommendations.csv",
-        mime="text/csv"
+        mime="text/csv",
+        key="download_security_recommendations_csv"
     )
-
-    # TXT DOWNLOAD
 
     rec_txt_lines = [
         "SECURITY REQUIREMENTS RECOMMENDATIONS",
@@ -2240,7 +2231,6 @@ if (
     ]
 
     for rec in st.session_state["recs"]:
-
         missing_details_text = ", ".join(
             rec["missing_details"]
         )
@@ -2276,7 +2266,8 @@ if (
         label="Download Recommendations as TXT",
         data=rec_txt.encode("utf-8"),
         file_name="security_recommendations.txt",
-        mime="text/plain"
+        mime="text/plain",
+        key="download_security_recommendations_txt"
     )
             
 #Clear results button------------------------------------------------------------
@@ -2284,13 +2275,33 @@ if (
 if "results_df" in st.session_state:
     st.write("---")
     st.write("### Start a New Classification?")
-    st.caption("Clear current results and classify a new set of requirements.")
-    if st.button("Clear Results", type="primary", use_container_width=True):
-        for key in ["results_df", "sentences", "cleaned_sentences", "combined_text", "input_was_csv", "recs"]:
-            if key in st.session_state:
-                del st.session_state[key]
+    st.caption(
+        "Clear current results and classify a new set of requirements."
+    )
+
+    if st.button(
+        "Clear Results",
+        type="primary",
+        use_container_width=True,
+        key="clear_classification_results_button"
+    ):
+        keys_to_clear = [
+            "results_df",
+            "sentences",
+            "cleaned_sentences",
+            "combined_text",
+            "input_was_csv",
+            "recs"
+        ]
+
+        for session_key in keys_to_clear:
+            st.session_state.pop(
+                session_key,
+                None
+            )
+
         st.rerun()
- 
+
 # Footer------------------------------------------------------------------------
 
 st.write("---")
