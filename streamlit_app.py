@@ -2166,21 +2166,6 @@ else:
             "Recommendations added. See the table below."
         )
 
-# ADD RECOMMENDATIONS TO REPORT
-
-if recs:
-
-    st.write("---")
-
-    if st.button(
-        "Add Recommendations to Report",
-        type="primary"
-    ):
-        st.session_state["recs"] = recs
-
-        st.success(
-            "Recommendations added. See the table below."
-        )
 
 # RECOMMENDATIONS TABLE
 if (
