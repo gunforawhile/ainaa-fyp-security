@@ -2153,7 +2153,6 @@ else:
                 "brackets must be decided by project stakeholders."
             )
 
-    st.write("---")
 
     if st.button(
         "Add Recommendations to Report",
